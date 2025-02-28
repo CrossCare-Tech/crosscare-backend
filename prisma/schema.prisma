@@ -1,0 +1,65 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Patient {
+  id        String     @id @default(uuid()) // UUID for primary key
+  email     String     @unique
+  password  String
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @default(now()) @map("updated_at")
+  name      String
+  age       Int?
+  activities PatientActivity[]
+  doctorId  String?    // Assuming this will be a UUID as well
+}
+
+model Doctor {
+  id        String     @id @default(uuid()) // UUID for primary key
+  name      String
+  email     String     @unique
+  password  String
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @default(now()) @map("updated_at")
+}
+
+model PatientActivity {
+  id             String   @id @default(uuid()) // UUID for primary key
+  patientId      String   @map("user_id") // UUID for foreign key
+  patient        Patient  @relation(fields: [patientId], references: [id])
+  date           DateTime
+  weight         Float
+  weight_unit    String
+  water          Int
+  steps          Int
+  sleepStart     DateTime @default(now())
+  sleepEnd       DateTime @default(now())
+  meal           Meals[]
+  heart_rate     Float
+  notetaking     String
+  wombPicture    String
+}
+
+model Meals {
+  mealId            String          @id @default(uuid()) // UUID for primary key
+  name              String
+  patientActivityId String         @map("user_activity_id") // UUID for foreign key
+  patientActivity   PatientActivity @relation(fields: [patientActivityId], references: [id])
+  @@unique([patientActivityId, mealId])
+}
+
+model MedicalDocs {
+  id         String   @id @default(uuid()) // UUID for primary key
+  files      String
+}
