@@ -1,0 +1,35 @@
+INSERT INTO "Patient" (
+  "id", 
+  "email", 
+  "password", 
+  "created_at", 
+  "updated_at", 
+  "name", 
+  "age", 
+  "doctorId"
+) VALUES (
+  '660e8400-e29b-41d4-a716-446655440001', -- UUID for second patient
+  'bob@example.com',
+  '$2b$10$08paaba47ICGcHpMlAVoIeqwVu9dzsiwc6jcFeaVftTLEtM.McyJ6', -- hashed 'password123'
+  CURRENT_TIMESTAMP,
+  CURRENT_TIMESTAMP,
+  'Bob Williams',
+  45,
+  '550e8400-e29b-41d4-a716-446655440000' -- First doctor's ID
+);
+
+INSERT INTO "Doctor" (
+  "id", 
+  "name", 
+  "email", 
+  "password", 
+  "created_at", 
+  "updated_at"
+) VALUES (
+  '550e8400-e29b-41d4-a716-446655440000', -- UUID for first doctor
+  'Dr. Jane Smith',
+  'jane.smith@example.com',
+  '$2b$10$08paaba47ICGcHpMlAVoIeqwVu9dzsiwc6jcFeaVftTLEtM.McyJ6', -- hashed 'password123'
+  CURRENT_TIMESTAMP,
+  CURRENT_TIMESTAMP
+);

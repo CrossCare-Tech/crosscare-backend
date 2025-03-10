@@ -1,156 +1,818 @@
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
-const createActivity = async (req, res) => {
-    const { id } = req.params;  // User ID
-    const { date, weight, weight_unit, water, steps, heart_rate, notetaking, wombPicture, sleepStart, sleepEnd } = req.body;
-    
-    // Use current date and time for 'date' if not provided
-    const currentDate = date || new Date();  // Use provided date or current date if not given
-
-    // Validate wombPicture to ensure it is a valid URL (basic validation)
-    const urlPattern = /^https?:\/\/[^\s$.?#].[^\s]*$/i; // Regex pattern to check for https:// URLs
-    if (wombPicture && !urlPattern.test(wombPicture)) {
-        return res.status(400).json({ message: "Invalid URL format for wombPicture" });
-    }
-
-    try {
-        const newActivity = await prisma.patientActivity.create({
-            data: {
-                userId: parseInt(id),  // Ensure 'id' is correctly parsed as an integer
-                date: currentDate,  // Use the current date or the provided one
-                weight,
-                weight_unit,
-                water,
-                steps,
-                heart_rate,
-                notetaking,
-                wombPicture,
-                sleepStart,  // Set the sleep start to current if not provided
-                sleepEnd,  // Set the sleep end to current if not provided
-            }
-        });
-
-        res.status(201).json(newActivity);
-    } catch (error) {
-        console.error("Error creating activity:", error);
-        res.status(500).json({ message: "Internal Server Error", details: error.message });
-    }
-};
-
-export const getUserActivities = async (req, res) => {
-    const { id } = req.params;  // User ID
+// Fetch user activities
+const getUserActivities = async (req, res) => {
+    const { id } = req.params;
     
     try {
         const activities = await prisma.patientActivity.findMany({
-            where: {
-                patientId: parseInt(id)
-            },
+            where: { patientId: String(id) },
+            orderBy: { date: "asc" } // Ensure order
         });
 
-        res.status(200).json(activities);
+        const mergedActivities = activities.reduce((acc, activity) => {
+            const date = activity.date.toISOString().split("T")[0];
+
+            if (!acc[date]) {
+                acc[date] = {
+                    date,
+                    details: {
+                        water: 0,
+                        heart: 0,
+                        sleep: { start: null, end: null },
+                        steps: 0,
+                        weight: { value: 0, unit: "kg" }
+                    }
+                };
+            }
+
+            // Merge values
+            acc[date].details.water += activity.water || 0;
+            acc[date].details.heart = Math.max(acc[date].details.heart, activity.heart_rate || 0);
+            acc[date].details.steps += activity.steps || 0;
+            acc[date].details.weight.value = activity.weight || acc[date].details.weight.value;
+            acc[date].details.weight.unit = activity.weight_unit || acc[date].details.weight.unit;
+
+            // Use the latest sleep data (if available)
+            if (activity.sleepStart) acc[date].details.sleep.start = activity.sleepStart;
+            if (activity.sleepEnd) acc[date].details.sleep.end = activity.sleepEnd;
+
+            return acc;
+        }, {});
+
+        res.status(200).json(Object.values(mergedActivities));
     } catch (error) {
         console.error("Error fetching activities:", error);
         res.status(500).json({ message: "Internal Server Error", details: error.message });
     }
 };
 
-const addMeals = async (req, res) => {
-    const { activityId } = req.params;
-    const { name } = req.body;
+
+// Find or create activity for today
+const findOrCreateActivity = async (patientId) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Set time to midnight
+
+    // Check if an activity exists for today
+    let activity = await prisma.patientActivity.findFirst({
+        where: {
+            patientId: String(patientId),
+            date: today,
+        },
+    });
+
+    // If no activity is found, create a new one
+    if (!activity) {
+        activity = await prisma.patientActivity.create({
+            data: {
+                patientId: String(patientId),
+                date: today,
+                water: 0,
+                steps: 0,
+                heart_rate: 0,
+                weight: 0,
+                weight_unit: "kg",
+                notetaking: "",
+                wombPicture: "", // Provide an empty string as a default value
+            },
+        });
+    }
+
+    return activity;
+};
+
+
+// Log Water Intake
+const logWaterIntake = async (req, res) => {
+    const { id } = req.params;
+    console.log("req.params:", req.params);
+    console.log("logWaterIntake id:", id);
+    const { water } = req.body;
+
+    console.log("logWaterIntake id:", id);
+
+    if (water === undefined || water === null || isNaN(water)) {
+        return res.status(400).json({ message: "Invalid water value. Must be a number." });
+    }
 
     try {
-        const meal = await prisma.meals.create({
-            data: {
-                patientActivityId: parseInt(activityId),
-                name,
-            }
+        const patientExists = await prisma.patient.findUnique({
+            where: { id: id },
         });
 
-        res.status(201).json(meal);
+        if (!patientExists) {
+            return res.status(400).json({ message: "Patient not found." });
+        }
+
+        const activity = await findOrCreateActivity(id);
+
+        const updatedActivity = await prisma.patientActivity.update({
+            where: {
+                id: activity.id, // Include the id from the activity object
+            },
+            data: { water: water },
+        });
+
+        
+
+        res.status(200).json(updatedActivity);
     } catch (error) {
-        console.error("Error adding meal:", error);
-        res.status(500).json({ message: "Internal Server Error", details: error.message });
+        console.error("Error logging water intake:", error);
+        res.status(500).json({ message: "Error logging water intake", error: error.message });
     }
 };
 
-export const updateActivity = async (req, res) => {
-    const { activityId } = req.params;
-    const { date, weight, weight_unit, water, steps, heart_rate, notetaking, wombPicture } = req.body;
+const getWaterStatus = async (req, res) => {
+    const { id } = req.params;
+  
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Set to midnight
+  
+      const sevenDaysAgo = new Date(today);
+      sevenDaysAgo.setDate(today.getDate() - 6); // Calculate 7 days ago
+  
+      const patient = await prisma.patient.findUnique({ // Fetch patient data including waterGoal
+        where: { id: String(id) },
+      });
+  
+      if (!patient) {
+        return res.status(400).json({ message: "Patient not found." });
+      }
+  
+      const activities = await prisma.patientActivity.findMany({
+        where: {
+          patientId: String(id),
+          date: {
+            gte: sevenDaysAgo,
+            lte: today,
+          },
+        },
+        orderBy: { date: 'asc' },
+      });
+  
+      const waterData = activities.map(activity => {
+        const goalMl = patient.waterGoal || 0; // Default goal is 2500 ml
+        const progress = goalMl > 0 ? (activity.water / goalMl) : 0; // Progress calculation
+
+        return {
+            id: activity.id,
+            date: activity.date.toISOString().split("T")[0], // Date in YYYY-MM-DD format
+            day: activity.date.toLocaleDateString('en-US', { weekday: 'short' }), // Short weekday name
+            waterMl: activity.water,
+            goalMl: goalMl,
+            progress: progress,
+        };
+    });
+  
+      res.status(200).json(waterData);
+    } catch (error) {
+      console.error("Error fetching water status:", error);
+      res.status(500).json({ message: "Internal Server Error", details: error.message });
+    }
+};
+
+
+
+// Log Sleep Duration
+const logSleepDuration = async (req, res) => {
+    try {
+        const { id } = req.params;
+        let { date, sleepStart, sleepEnd } = req.body;
+
+        // Validate required fields
+        if (!id || !sleepStart || !sleepEnd) {
+            return res.status(400).json({ message: "Missing required fields: id, sleepStart, and sleepEnd are required." });
+        }
+
+        // Check if the patient exists
+        const patientExists = await prisma.patient.findUnique({ where: { id: String(id) } });
+        if (!patientExists) {
+            return res.status(404).json({ message: "Patient not found." });
+        }
+
+        // Normalize date or use today's date
+        date = date ? new Date(date) : new Date();
+        date.setHours(12, 0, 0, 0); // Set to midnight to prevent timezone issues
+
+        // Function to convert 12-hour AM/PM time to Date object
+        const parseTimeString = (timeStr, baseDate) => {
+            if (!timeStr.includes("AM") && !timeStr.includes("PM")) {
+                throw new Error(`Invalid time format: ${timeStr}`);
+            }
+
+            const [time, period] = timeStr.split(" ");
+            let [hours, minutes] = time.split(":").map(Number);
+            if (period.toLowerCase() === "pm" && hours !== 12) hours += 12;
+            if (period.toLowerCase() === "am" && hours === 12) hours = 0;
+
+            const parsedDate = new Date(baseDate);
+            parsedDate.setHours(hours, minutes, 0, 0);
+            return parsedDate;
+        };
+
+        // Convert sleep times to Date objects
+        const sleepStartTime = parseTimeString(sleepStart, date);
+        let sleepEndTime = parseTimeString(sleepEnd, date);
+
+        // Adjust for overnight sleep (e.g., 11 PM - 7 AM)
+        if (sleepEndTime <= sleepStartTime) {
+            sleepEndTime.setDate(sleepEndTime.getDate() + 1);
+        }
+
+        // Find or create activity for the given patient and date
+        let activity = await prisma.patientActivity.findFirst({
+            where: { patientId: String(id), date },
+        });
+
+        if (activity) {
+            // Update existing activity
+            activity = await prisma.patientActivity.update({
+                where: { id: activity.id },
+                data: { sleepStart: sleepStartTime, sleepEnd: sleepEndTime },
+            });
+        } else {
+            // Create new activity
+            activity = await prisma.patientActivity.create({
+                data: {
+                    patientId: String(id),
+                    date,
+                    sleepStart: sleepStartTime,
+                    sleepEnd: sleepEndTime,
+                },
+            });
+        }
+
+        // Function to calculate sleep duration
+        const calculateDuration = (start, end) => {
+            const durationMs = end - start;
+            const hours = Math.floor(durationMs / (60 * 60 * 1000));
+            const minutes = Math.floor((durationMs % (60 * 60 * 1000)) / (60 * 1000));
+            return minutes > 0 ? `${hours} hr ${minutes} min` : `${hours} hr`;
+        };
+
+        // Send response
+        res.status(200).json({
+            id: activity.id,
+            date: date.toISOString().split("T")[0],
+            sleepStart: sleepStartTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }),
+            sleepEnd: sleepEndTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }),
+            duration: calculateDuration(sleepStartTime, sleepEndTime),
+        });
+
+    } catch (error) {
+        console.error("❌ Error logging sleep duration:", error);
+        res.status(500).json({ message: "Error logging sleep duration", error: error.message || error });
+    }
+};
+
+const getSleepStatus = async (req, res) => {
+    const { id } = req.params;
 
     try {
-        const updatedActivity = await prisma.patientActivity.update({
-            where: {
-                id: parseInt(activityId)
+        if (!id) {
+            return res.status(400).json({ message: "Patient ID is required." });
+        }
+
+        const today = new Date();
+        // Use local midnight time instead of UTC
+        today.setHours(0, 0, 0, 0);
+
+        const sevenDaysAgo = new Date(today);
+        sevenDaysAgo.setDate(today.getDate() - 6);
+
+        const patient = await prisma.patient.findUnique({ where: { id: String(id) } });
+
+        if (!patient) {
+            return res.status(404).json({ message: "Patient not found." });
+        }
+
+        // Include createdAt in the selection
+        const activities = await prisma.patientActivity.findMany({
+            where: { 
+                patientId: String(id), 
+                // date: { gte: sevenDaysAgo, lte: today } 
             },
-            data: {
-                date,
-                weight,
-                weight_unit,
-                water,
-                steps,
-                heart_rate,
-                notetaking,
-                wombPicture,
+            orderBy: { date: "asc" },
+            select: {
+                id: true,
+                date: true,
+                sleepStart: true, 
+                sleepEnd: true,
             }
+        });
+
+        // Create a function to calculate sleep duration
+        const calculateDuration = (sleepStart, sleepEnd) => {
+            if (!sleepStart || !sleepEnd) return "0 hr";
+            
+            const start = new Date(sleepStart);
+            let end = new Date(sleepEnd);
+            
+            if (end <= start) end.setDate(end.getDate() + 1);
+
+            const durationMs = end - start;
+            const hours = Math.floor(durationMs / (60 * 60 * 1000));
+            const minutes = Math.floor((durationMs % (60 * 60 * 1000)) / (60 * 1000));
+
+            return minutes > 0 ? `${hours} hr ${minutes} min` : `${hours} hr`;
+        };
+
+        // Process the activities directly without filling in missing days
+        const sleepData = activities.map(activity => {
+            const activityDate = new Date(activity.date);
+            const formattedDate = `${activityDate.getFullYear()}-${String(activityDate.getMonth() + 1).padStart(2, '0')}-${String(activityDate.getDate()).padStart(2, '0')}`;
+            return {
+                id: activity.id,
+                day: new Date(activity.date).toLocaleDateString("en-US", { weekday: "short" }),
+                date: formattedDate,
+                sleepStart: activity.sleepStart ? new Date(activity.sleepStart).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }) : null,
+                sleepEnd: activity.sleepEnd ? new Date(activity.sleepEnd).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }) : null,
+                duration: activity.sleepStart && activity.sleepEnd ? calculateDuration(activity.sleepStart, activity.sleepEnd) : "0 hr",
+            };
+        });
+
+        res.status(200).json(sleepData);
+    } catch (error) {
+        console.error("Error fetching sleep status:", error);
+        res.status(500).json({ message: "Error fetching sleep status", error: error.message || error });
+    }
+};
+
+const deleteSleepStatus = async (req, res) => {
+    const { id } = req.params; // Sleep track ID
+
+    try {
+        // Check if the sleep track exists
+        const sleepTrack = await prisma.patientActivity.findUnique({
+            where: { id: String(id) },
+        });
+
+        if (!sleepTrack) {
+            return res.status(404).json({ message: "Sleep track not found." });
+        }
+
+        // Delete the sleep track
+        await prisma.patientActivity.delete({
+            where: { id: String(id) },
+        });
+
+        res.status(200).json({ message: "Sleep track deleted successfully." });
+    } catch (error) {
+        console.error("Error deleting sleep track:", error);
+        res.status(500).json({ message: "Error deleting sleep track", error: error.message });
+    }
+};
+
+
+// Calculate duration in hours, handling cases where sleepEnd is on the next day
+
+// Log Heart Rate
+const logHeartRate = async (req, res) => {
+    const { patientId } = req.params;
+    const { heartRate } = req.body;
+
+    try {
+        const activity = await findOrCreateActivity(patientId);
+
+        const updatedActivity = await prisma.patientActivity.update({
+            where: { patientId_date: { patientId: String(patientId), date: activity.date } },
+            data: { heart_rate: heartRate }
         });
 
         res.status(200).json(updatedActivity);
     } catch (error) {
-        console.error("Error updating activity:", error);
-        res.status(500).json({ message: "Internal Server Error", details: error.message });
+        res.status(500).json({ message: "Error logging heart rate", error });
     }
 };
 
-const updateMeal = async (req, res) => {
-    const { activityId, mealId } = req.params;  // Get the activityId and mealId from the request parameters
-    const { name } = req.body;  // Get the meal details from the request body
-    
-    try {
-        // Find and update the meal with the provided mealId and activityId
-        const updatedMeal = await prisma.meals.update({
-            where: {
-                    mealId: parseInt(mealId),  // Make sure mealId is passed correctly
-                    patientActivityId: parseInt(activityId),  // Ensure activityId is passed correctly
-            },
-            data: {
-                name,  // Update the meal name
-            },
-        });
-
-        res.status(200).json(updatedMeal);  // Send back the updated meal
-    } catch (error) {
-        console.error("Error updating meal:", error);
-        res.status(500).json({ message: "Internal Server Error", details: error.message });
-    }
-};
-
-const getAllMeals = async (req, res) => {
-    const { activityId } = req.params;  // Get the activityId from request parameters
+// Log Steps
+const logSteps = async (req, res) => {
+    const { id } = req.params; // patientId
+    const { steps } = req.body;
+    console.log("req.params:", req.params);
+    console.log("logWaterIntake id:", id);
+    console.log("Weight Unit:", steps);
 
     try {
-        // Find all meals related to the specified activity
-        const meals = await prisma.meals.findMany({
-            where: {
-                patientActivityId: parseInt(activityId),  // Filter meals by the activityId
-            },
+
+        const patient = await prisma.patient.findUnique({
+            where: { id: id },
         });
 
-        // Check if meals exist for the given activity
-        if (meals.length === 0) {
-            return res.status(404).json({ message: "No meals found for this activity" });
+        if (!patient) {
+            return res.status(400).json({ message: "Patient not found." });
         }
 
-        // Return the meals for the activity
-        res.status(200).json(meals);
+        const activity = await findOrCreateActivity(id); // Ensure this function handles activity creation properly
+
+        const updatedActivity = await prisma.patientActivity.update({
+            where: {
+                id: activity.id
+            },
+            data: {
+                steps: steps // Use correct field name
+            }
+        });
+
+        res.status(200).json({
+            steps: updatedActivity.steps,
+        });
     } catch (error) {
-        console.error("Error fetching meals:", error);
-        res.status(500).json({ message: "Internal Server Error", details: error.message });
+        console.error("Error logging steps:", error); // Log error for debugging
+        res.status(500).json({ message: "Error logging steps", error: error.message || error });
+    }
+};
+// Log Weight
+const logWeight = async (req, res) => {
+    const { id } = req.params;
+    console.log("req.params:", req.params);
+    console.log("logWaterIntake id:", id);
+    let { weight, weight_unit } = req.body;
+    console.log("Weight:", weight);
+    console.log("Weight Unit:", weight_unit);
+
+    try {
+        const patient = await prisma.patient.findUnique({
+            where: { id: id },
+        });
+
+        if (!patient) {
+            return res.status(400).json({ message: "Patient not found." });
+        }
+
+        const now = new Date();
+        const isoTime = now.toISOString();
+
+        const activity = await findOrCreateActivity(id);
+
+        const updatedActivity = await prisma.patientActivity.update({
+            where: { id: activity.id, }, // Corrected where clause
+            data: { weight, weight_unit },
+        });
+
+        res.status(200).json({
+            weight: updatedActivity.weight,
+            weight_unit: updatedActivity.weight_unit,
+            date: isoTime,
+        });
+    } catch (error) {
+        console.error("Error logging weight:", error);
+        res.status(500).json({ message: "Error logging weight", error: error.message });
     }
 };
 
+const getWeightStatus = async (req, res) => {
+    const { id } = req.params; // Assuming patient ID is in req.params.id
+  
+    try {
+      // Get current date and set to start of day
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+  
+      // Calculate 7 days ago
+      const sevenDaysAgo = new Date(today);
+      sevenDaysAgo.setDate(today.getDate() - 6);
+  
+      // Get activities for the last 7 days
+      const activities = await prisma.patientActivity.findMany({
+        where: {
+          patientId: String(id),
+          date: {
+            gte: sevenDaysAgo,
+            lte: new Date(), // Use current date and time to include today's entries
+          },
+          weight: { not: null }, // Only include activities with weight data
+        },
+        orderBy: { date: 'asc' },
+      });
+  
+      // Helper function to format date as YYYY-MM-DD
+      const formatDateYYYYMMDD = (date) => {
+        return date.toISOString().split('T')[0]; // Gets the YYYY-MM-DD part
+      };
+  
+      // Find the last logged weight
+      const lastActivity = activities.length > 0 ? activities[activities.length - 1] : null;
+      const lastWeight = lastActivity ? lastActivity.weight : null;
+      const lastWeightUnit = lastActivity ? lastActivity.weight_unit : null;
+      const lastWeightDate = lastActivity ? formatDateYYYYMMDD(lastActivity.date) : null;
+  
+      // Prepare data for the bar graph
+      const weightData = activities.map(activity => ({
+        day: activity.date.toLocaleDateString('en-US', { weekday: 'short' }),
+        weight: activity.weight,
+        weight_unit: activity.weight_unit,
+        date: formatDateYYYYMMDD(activity.date) // Format as YYYY-MM-DD
+      }));
+  
+      res.status(200).json({
+        success: true,
+        data: {
+          lastWeight: lastWeight,
+          weightData: weightData,
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching weight status:", error);
+      res.status(500).json({ 
+        success: false, 
+        message: "Error fetching weight status", 
+        error: error.message 
+      });
+    }
+  };
+
+const createNote = async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { title, description } = req.body;
+  
+      if (!title || !description) {
+        return res.status(400).json({
+          success: false,
+          message: "Title and description are required"
+        });
+      }
+  
+      // Get current date and time
+      const now = new Date();
+      
+      // Get the time zone offset in minutes and convert to milliseconds
+      const timeZoneOffset = now.getTimezoneOffset() * 60000;
+      
+      // Adjust the date by adding the offset (subtract because getTimezoneOffset returns negative for east, positive for west)
+      const localTime = new Date(now.getTime() - timeZoneOffset);
+      
+      // Create ISO string from the adjusted time
+      const isoTime = localTime.toISOString();
+      
+      const patient = await prisma.patient.findUnique({
+        where: { id }
+      });
+  
+      if (!patient) {
+        return res.status(404).json({
+          success: false,
+          message: "Patient not found"
+        });
+      }
+  
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      let activity = await prisma.patientActivity.findFirst({
+        where: {
+          patientId: id,
+          date: {
+            gte: today,
+            lt: new Date(today.getTime() + 24 * 60 * 60 * 1000),
+          },
+        },
+      });
+      
+      // Store time data in the note
+      const noteData = {
+        title,
+        description,
+        createdAt: isoTime,
+      };
+      
+      // Create new activity
+      activity = await prisma.patientActivity.create({
+        data: {
+          patientId: id,
+          date: now, // This will be stored in UTC in the database
+          notetaking: JSON.stringify(noteData),
+        },
+      });
+      
+      // Format the date for display in local time
+      const formattedDate = now.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: true
+      });
+      
+      return res.status(201).json({
+        success: true,
+        message: "Note created successfully",
+        data: {
+          id: activity.id,
+          patientId: activity.patientId,
+          date: isoTime, // Return the ISO time with local time zone adjustment
+          title: noteData.title,
+          description: noteData.description,
+          createdAt: noteData.createdAt,
+        }
+      });
+    } catch (error) {
+      console.error("Error creating note:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to create note",
+        error: error.message
+      });
+    }
+  };
+
+  const getUserNotes = async (req, res) => {
+    try {
+      const { id } = req.params; // patientId from URL
+      
+      // Check if patient exists
+      const patient = await prisma.patient.findUnique({
+        where: { id }
+      });
+      
+      if (!patient) {
+        return res.status(404).json({
+          success: false,
+          message: "Patient not found"
+        });
+      }
+      
+      // Get all activities with notes
+      const activities = await prisma.patientActivity.findMany({
+        where: {
+          patientId: id,
+          notetaking: { not: null }
+        },
+        orderBy: {
+          date: 'desc'
+        }
+      });
+      
+      // Get current date and time
+      const now = new Date();
+      
+      
+      // Get the time zone offset in minutes and convert to milliseconds
+      const timeZoneOffset = now.getTimezoneOffset() * 60000;
+      
+      // Adjust the date by adding the offset (subtract because getTimezoneOffset returns negative for east, positive for west)
+      const localTime = new Date(now.getTime() - timeZoneOffset);
+      
+      // Create ISO string from the adjusted time
+      const isoTime = localTime.toISOString();
+      
+      // Parse notes from activities
+      const allNotes = activities.map(activity => {
+        try {
+          const noteData = JSON.parse(activity.notetaking);
+          let createdAt;
+          
+          // Use the stored createdAt time which has local time zone adjustment
+          if (noteData.createdAt) {
+            createdAt = new Date(noteData.createdAt);
+          } else {
+            // For older notes that don't have adjusted createdAt
+            createdAt = new Date(activity.date);
+          }
+          
+          // Format the date for display
+          const formattedDate = createdAt.toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            hour12: true
+          });
+          
+          return {
+            id: activity.id,
+            patientId: activity.patientId,
+            date: activity.date,
+            title: noteData.title || "Untitled",
+            description: noteData.description || "",
+            createdAt: createdAt,
+            formattedDate: formattedDate,
+          };
+        } catch (e) {
+          // Handle case where notetaking isn't valid JSON
+          const createdAt = new Date(activity.date);
+          const formattedDate = createdAt.toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            hour12: true
+          });
+          
+          return {
+            id: activity.id,
+            patientId: activity.patientId,
+            date: activity.date,
+            title: "Untitled Note",
+            description: activity.notetaking || "",
+            createdAt: createdAt,
+            formattedDate: formattedDate
+          };
+        }
+      });
+      
+      // Get current date at the start of the day for categorization
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      
+      // Calculate date for 7 days ago
+      const lastWeekStart = new Date(today);
+      lastWeekStart.setDate(today.getDate() - 7);
+      
+      // Initialize section arrays
+      const todayItems = [];
+      const lastWeekItems = [];
+      const previouslyItems = [];
+      
+      // Sort notes into categories
+      allNotes.forEach(note => {
+        const noteDate = note.createdAt;
+        
+        // Format the description to truncate it with ellipsis if too long
+        if (note.description && note.description.length > 30) {
+          note.description = note.description.substring(0, 30) + ' ...';
+        }
+        
+        // Create the item object with formatted time
+        const item = {
+          id: note.id,
+          title: note.title,
+          description: note.description,
+          date: note.formattedDate // Use formatted date that respects time zone
+        };
+        
+        // Check if note was created today
+        if (noteDate >= today) {
+          todayItems.push(item);
+        } 
+        // Check if note was created in the last week
+        else if (noteDate >= lastWeekStart) {
+          lastWeekItems.push(item);
+        } 
+        // Everything else is categorized as previously
+        else {
+          previouslyItems.push(item);
+        }
+      });
+      
+      // Build content sections array in the exact format requested
+      const contentSections = [];
+      
+      // Add Today section if there are notes
+      if (todayItems.length > 0) {
+        contentSections.push({
+          title: "Today",
+          items: todayItems
+        });
+      }
+      
+      // Add Last Week section if there are notes
+      if (lastWeekItems.length > 0) {
+        contentSections.push({
+          title: "Last Week",
+          items: lastWeekItems
+        });
+      }
+      
+      // Add Previously section if there are notes
+      if (previouslyItems.length > 0) {
+        contentSections.push({
+          title: "Previously",
+          items: previouslyItems
+        });
+      }
+      
+      // Return the content sections with today's date and time
+      return res.status(200).json({
+        success: true,
+        data: contentSections,
+        currentTime: isoTime,
+      });
+    } catch (error) {
+      console.error("Error fetching notes:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to fetch notes",
+        error: error.message
+      });
+    }
+  };
 
 
-
-
-export default {createActivity, addMeals, getUserActivities, updateActivity, updateMeal, getAllMeals};
+export default {
+    getUserActivities,
+    logWaterIntake,
+    getWaterStatus,
+    logSleepDuration,
+    getSleepStatus,
+    logHeartRate,
+    logSteps,
+    logWeight,
+    createNote,
+    getWeightStatus,
+    deleteSleepStatus,
+    getUserNotes
+};

@@ -39,16 +39,16 @@ model PatientActivity {
   patientId      String   @map("user_id") // UUID for foreign key
   patient        Patient  @relation(fields: [patientId], references: [id])
   date           DateTime
-  weight         Float
-  weight_unit    String
-  water          Int
-  steps          Int
-  sleepStart     DateTime @default(now())
-  sleepEnd       DateTime @default(now())
+  weight         Float?
+  weight_unit    String?
+  water          Int?
+  steps          Int?
+  sleepStart     DateTime?
+  sleepEnd       DateTime?
   meal           Meals[]
-  heart_rate     Float
-  notetaking     String
-  wombPicture    String
+  heart_rate     Float?
+  notetaking     String?
+  wombPicture    String?
 }
 
 model Meals {

@@ -8,6 +8,7 @@ const prisma = new PrismaClient();
 const login = async (req, res) => {
     try {
         const { email, name, password, doctorId } = req.body;
+        console.log("Hi");
 
         // Check if the username or email exists in the database
         const user = await prisma.patient.findFirst({
