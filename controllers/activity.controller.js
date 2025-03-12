@@ -803,12 +803,49 @@ const createNote = async (req, res) => {
 
   const addMedication = async (req, res) => {
     try {
-      const { id } = req.params; // PatientActivity id
+      // Get patientId from URL - modified to use patientId directly
+      const { id: patientId } = req.params; 
       const { medicationName, startDate, endDate, days, times } = req.body;
   
       // Validate required fields
       if (!medicationName || !startDate || !days || !times || days.length === 0 || times.length === 0) {
-        return res.status(400).json({ error: "Missing required medication information" });
+        return res.status(400).json({ 
+          success: false,
+          error: "Missing required medication information" 
+        });
+      }
+      
+      // Check if the patient exists
+      const patient = await prisma.patient.findUnique({
+        where: { id: patientId }
+      });
+      
+      if (!patient) {
+        return res.status(404).json({
+          success: false,
+          message: "Patient not found"
+        });
+      }
+  
+      // Find or create PatientActivity for today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Set to midnight
+  
+      let patientActivity = await prisma.patientActivity.findFirst({
+        where: {
+          patientId: patientId,
+          date: today
+        }
+      });
+  
+      // If no activity exists for today, create one
+      if (!patientActivity) {
+        patientActivity = await prisma.patientActivity.create({
+          data: {
+            patientId: patientId,
+            date: today
+          }
+        });
       }
   
       // Format dates properly
@@ -834,7 +871,7 @@ const createNote = async (req, res) => {
           endDate: formattedEndDate,
           days,
           times: formattedTimes,
-          patientActivityId: id
+          patientActivityId: patientActivity.id // Use the ID of the found or created activity
         }
       });
   
@@ -917,7 +954,8 @@ const createNote = async (req, res) => {
           times: med.times.map(time => 
             time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
           ),
-          activityDate: med.patientActivity.date.toISOString().split('T')[0]
+          activityDate: med.patientActivity.date.toISOString().split('T')[0],
+          completed: med.completed // Include the completed status here
         };
       });
       
@@ -952,6 +990,71 @@ const createNote = async (req, res) => {
       });
     }
   };
+  const markMedicationCompleted = async (req, res) => {
+    try {
+      // Log all params to debug
+      console.log("Request params:", req.params);
+      
+      // Check which parameter contains the medication ID
+      const medicationId = req.params.medicationId || req.params.id;
+      
+      // Log the extracted medication ID
+      console.log("Medication ID:", medicationId);
+      
+      const { completed } = req.body;
+      
+      // Log request body
+      console.log("Request body:", req.body);
+  
+      // Validate required fields
+      if (completed === undefined) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Completed status is required" 
+        });
+      }
+  
+      // Verify medication ID is not undefined
+      if (!medicationId) {
+        return res.status(400).json({
+          success: false,
+          message: "Medication ID is required"
+        });
+      }
+  
+      // Check if medication exists
+      const medication = await prisma.medication.findUnique({
+        where: { id: medicationId }
+      });
+  
+      if (!medication) {
+        return res.status(404).json({
+          success: false,
+          message: "Medication not found"
+        });
+      }
+  
+      // Update medication completion status
+      const updatedMedication = await prisma.medication.update({
+        where: { id: medicationId },
+        data: { completed }
+      });
+  
+      return res.status(200).json({
+        success: true,
+        message: `Medication ${completed ? 'marked as completed' : 'marked as incomplete'}`,
+        data: updatedMedication
+      });
+    } catch (error) {
+      console.error("Error updating medication completion status:", error);
+      console.error("Error details:", error.stack);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to update medication completion status",
+        error: error.message
+      });
+    }
+  };
 
 
 export default {
@@ -968,5 +1071,6 @@ export default {
     deleteSleepStatus,
     getUserNotes,
     addMedication,
-    getMedications
+    getMedications,
+    markMedicationCompleted
 };

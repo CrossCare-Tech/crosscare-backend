@@ -21,5 +21,6 @@ router.get('/user/activity/:id/notes', activityController.getUserNotes);
 
 //add Medication
 router.post('/user/activity/:id/addMedication', activityController.addMedication);
-router.post('/user/activity/:id/getMedication', activityController.getMedications);
+router.get('/user/activity/:id/getMedication', activityController.getMedications);
+router.patch('/user/activity/:id/updateStatus/:id/completed', activityController.markMedicationCompleted);
 export default router;
