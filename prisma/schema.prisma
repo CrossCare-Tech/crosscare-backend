@@ -49,6 +49,7 @@ model PatientActivity {
   heart_rate     Float?
   notetaking     String?
   wombPicture    String?
+  medications    Medication[]
 }
 
 model Meals {
@@ -62,4 +63,17 @@ model Meals {
 model MedicalDocs {
   id         String   @id @default(uuid()) // UUID for primary key
   files      String
+}
+
+model Medication {
+  id              String   @id @default(uuid())
+  patientActivityId String
+  patientActivity   PatientActivity @relation(fields: [patientActivityId], references: [id])
+  medicationName   String
+  startDate        DateTime
+  endDate          DateTime?
+  days             String[]  // This will store the days of the week (e.g., ["M", "T", "W"])
+  times            DateTime[] // This will store the times for medication
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
