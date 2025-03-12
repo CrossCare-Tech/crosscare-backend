@@ -72,6 +72,7 @@ model Medication {
   medicationName   String
   startDate        DateTime
   endDate          DateTime?
+  completed       Boolean   @default(false)
   days             String[]  // This will store the days of the week (e.g., ["M", "T", "W"])
   times            DateTime[] // This will store the times for medication
   createdAt        DateTime @default(now())

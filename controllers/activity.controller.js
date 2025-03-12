@@ -801,6 +801,158 @@ const createNote = async (req, res) => {
     }
   };
 
+  const addMedication = async (req, res) => {
+    try {
+      const { id } = req.params; // PatientActivity id
+      const { medicationName, startDate, endDate, days, times } = req.body;
+  
+      // Validate required fields
+      if (!medicationName || !startDate || !days || !times || days.length === 0 || times.length === 0) {
+        return res.status(400).json({ error: "Missing required medication information" });
+      }
+  
+      // Format dates properly
+      const formattedStartDate = new Date(startDate);
+      const formattedEndDate = endDate ? new Date(endDate) : null;
+      
+      // Format times (assuming times come as string array like ["08:00", "20:00"])
+      const formattedTimes = times.map(time => {
+        // Create a date object for each time
+        const [hours, minutes] = time.split(':');
+        const timeDate = new Date();
+        timeDate.setHours(parseInt(hours, 10));
+        timeDate.setMinutes(parseInt(minutes, 10));
+        timeDate.setSeconds(0);
+        return timeDate;
+      });
+  
+      // Create medication in the database using Prisma
+      const newMedication = await prisma.medication.create({
+        data: {
+          medicationName,
+          startDate: formattedStartDate,
+          endDate: formattedEndDate,
+          days,
+          times: formattedTimes,
+          patientActivityId: id
+        }
+      });
+  
+      return res.status(201).json({
+        success: true,
+        message: "Medication added successfully",
+        data: newMedication
+      });
+    } catch (error) {
+      console.error("Error adding medication:", error);
+      return res.status(500).json({ 
+        success: false,
+        message: "Failed to add medication", 
+        error: error.message 
+      });
+    }
+  };
+
+  const getMedications = async (req, res) => {
+    try {
+      const { id } = req.params; // patientId
+      const { startDate, endDate } = req.query; // Optional date filters
+      
+      // Check if patient exists
+      const patient = await prisma.patient.findUnique({
+        where: { id }
+      });
+      
+      if (!patient) {
+        return res.status(404).json({
+          success: false,
+          message: "Patient not found"
+        });
+      }
+      
+      // Build query for medications
+      let query = {
+        where: {
+          patientActivity: {
+            patientId: id
+          }
+        },
+        orderBy: {
+          startDate: 'asc'
+        },
+        include: {
+          patientActivity: {
+            select: {
+              date: true
+            }
+          }
+        }
+      };
+      
+      // Add date filters if provided
+      if (startDate || endDate) {
+        query.where.startDate = {};
+        
+        if (startDate) {
+          query.where.startDate.gte = new Date(startDate);
+        }
+        
+        if (endDate) {
+          query.where.startDate.lte = new Date(endDate);
+        }
+      }
+      
+      // Get medications
+      const medications = await prisma.medication.findMany(query);
+      
+      // Format the medication data
+      const formattedMedications = medications.map(med => {
+        return {
+          id: med.id,
+          medicationName: med.medicationName,
+          patientActivityId: med.patientActivityId,
+          startDate: med.startDate.toISOString().split('T')[0], // Format as YYYY-MM-DD
+          endDate: med.endDate ? med.endDate.toISOString().split('T')[0] : null,
+          days: med.days,
+          times: med.times.map(time => 
+            time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+          ),
+          activityDate: med.patientActivity.date.toISOString().split('T')[0]
+        };
+      });
+      
+      // Group medications by active status (current vs. past)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const activeMedications = formattedMedications.filter(med => {
+        const endDate = med.endDate ? new Date(med.endDate) : null;
+        return !endDate || endDate >= today;
+      });
+      
+      const pastMedications = formattedMedications.filter(med => {
+        const endDate = med.endDate ? new Date(med.endDate) : null;
+        return endDate && endDate < today;
+      });
+      
+      return res.status(200).json({
+        success: true,
+        data: {
+          active: activeMedications,
+          past: pastMedications
+        }
+      });
+      
+    } catch (error) {
+      console.error("Error fetching medications:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to fetch medications",
+        error: error.message
+      });
+    }
+  };
+
 
 export default {
     getUserActivities,
@@ -814,5 +966,7 @@ export default {
     createNote,
     getWeightStatus,
     deleteSleepStatus,
-    getUserNotes
+    getUserNotes,
+    addMedication,
+    getMedications
 };

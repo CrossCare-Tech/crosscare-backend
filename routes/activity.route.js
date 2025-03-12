@@ -18,4 +18,8 @@ router.get('/user/activity/:id', activityController.getUserActivities);
 //note taking 
 router.post('/user/activity/:id/note', activityController.createNote);
 router.get('/user/activity/:id/notes', activityController.getUserNotes);
+
+//add Medication
+router.post('/user/activity/:id/addMedication', activityController.addMedication);
+router.post('/user/activity/:id/getMedication', activityController.getMedications);
 export default router;
