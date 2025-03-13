@@ -48,7 +48,6 @@ const getUserActivities = async (req, res) => {
     }
 };
 
-
 // Find or create activity for today
 const findOrCreateActivity = async (patientId) => {
     const today = new Date();
@@ -81,7 +80,6 @@ const findOrCreateActivity = async (patientId) => {
 
     return activity;
 };
-
 
 // Log Water Intake
 const logWaterIntake = async (req, res) => {
@@ -128,7 +126,7 @@ const getWaterStatus = async (req, res) => {
   
     try {
       const today = new Date();
-      today.setHours(0, 0, 0, 0); // Set to midnight
+      today.setHours(12, 0, 0, 0); // Set to midnight
   
       const sevenDaysAgo = new Date(today);
       sevenDaysAgo.setDate(today.getDate() - 6); // Calculate 7 days ago
@@ -172,8 +170,6 @@ const getWaterStatus = async (req, res) => {
       res.status(500).json({ message: "Internal Server Error", details: error.message });
     }
 };
-
-
 
 // Log Sleep Duration
 const logSleepDuration = async (req, res) => {
@@ -341,29 +337,37 @@ const getSleepStatus = async (req, res) => {
 };
 
 const deleteSleepStatus = async (req, res) => {
-    const { id } = req.params; // Sleep track ID
+  const { id } = req.params; // Sleep track ID
 
-    try {
-        // Check if the sleep track exists
-        const sleepTrack = await prisma.patientActivity.findUnique({
-            where: { id: String(id) },
-        });
+  try {
+      // Check if the sleep track exists
+      const sleepTrack = await prisma.patientActivity.findUnique({
+          where: { id: String(id) },
+      });
 
-        if (!sleepTrack) {
-            return res.status(404).json({ message: "Sleep track not found." });
-        }
+      if (!sleepTrack) {
+          return res.status(404).json({ message: "Sleep track not found." });
+      }
 
-        // Delete the sleep track
-        await prisma.patientActivity.delete({
-            where: { id: String(id) },
-        });
+      // Instead of deleting the record, set sleep fields to NULL
+      const updatedActivity = await prisma.patientActivity.update({
+          where: { id: String(id) },
+          data: {
+              sleepStart: null,
+              sleepEnd: null,
+          },
+      });
 
-        res.status(200).json({ message: "Sleep track deleted successfully." });
-    } catch (error) {
-        console.error("Error deleting sleep track:", error);
-        res.status(500).json({ message: "Error deleting sleep track", error: error.message });
-    }
+      res.status(200).json({ 
+          message: "Sleep data removed successfully.", 
+          data: updatedActivity 
+      });
+  } catch (error) {
+      console.error("Error deleting sleep data:", error);
+      res.status(500).json({ message: "Error deleting sleep data", error: error.message });
+  }
 };
+
 
 
 // Calculate duration in hours, handling cases where sleepEnd is on the next day
@@ -469,7 +473,7 @@ const getWeightStatus = async (req, res) => {
     try {
       // Get current date and set to start of day
       const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      today.setHours(12, 0, 0, 0);
   
       // Calculate 7 days ago
       const sevenDaysAgo = new Date(today);
