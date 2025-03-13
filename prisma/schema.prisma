@@ -42,6 +42,7 @@ model PatientActivity {
   weight         Float?
   weight_unit    String?
   water          Int?
+  waterGoal      Int?
   steps          Int?
   sleepStart     DateTime?
   sleepEnd       DateTime?

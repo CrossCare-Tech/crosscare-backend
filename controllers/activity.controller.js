@@ -126,7 +126,7 @@ const getWaterStatus = async (req, res) => {
   
     try {
       const today = new Date();
-      today.setHours(12, 0, 0, 0); // Set to midnight
+      today.setUTCHours(0, 0, 0, 0); // Set to midnight
   
       const sevenDaysAgo = new Date(today);
       sevenDaysAgo.setDate(today.getDate() - 6); // Calculate 7 days ago
