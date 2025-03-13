@@ -19,6 +19,7 @@ const getUserActivities = async (req, res) => {
                     date,
                     details: {
                         water: 0,
+                        waterGoal:0,
                         heart: 0,
                         sleep: { start: null, end: null },
                         steps: 0,
@@ -74,6 +75,7 @@ const findOrCreateActivity = async (patientId) => {
                 weight_unit: "kg",
                 notetaking: "",
                 wombPicture: "", // Provide an empty string as a default value
+                waterGoal: patientId.waterGoal || 0,
             },
         });
     }
@@ -121,56 +123,98 @@ const logWaterIntake = async (req, res) => {
     }
 };
 
-const getWaterStatus = async (req, res) => {
-    const { id } = req.params;
-  
-    try {
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0); // Set to midnight
-  
-      const sevenDaysAgo = new Date(today);
-      sevenDaysAgo.setDate(today.getDate() - 6); // Calculate 7 days ago
-  
-      const patient = await prisma.patient.findUnique({ // Fetch patient data including waterGoal
-        where: { id: String(id) },
-      });
-  
-      if (!patient) {
-        return res.status(400).json({ message: "Patient not found." });
-      }
-  
-      const activities = await prisma.patientActivity.findMany({
-        where: {
-          patientId: String(id),
-          date: {
-            gte: sevenDaysAgo,
-            lte: today,
-          },
-        },
-        orderBy: { date: 'asc' },
-      });
-  
-      const waterData = activities.map(activity => {
-        const goalMl = patient.waterGoal || 0; // Default goal is 2500 ml
-        const progress = goalMl > 0 ? (activity.water / goalMl) : 0; // Progress calculation
+const WaterGoal = async (req, res) => {
+  console.log("🔵 Received request to update water goal");
 
-        return {
-            id: activity.id,
-            date: activity.date.toISOString().split("T")[0], // Date in YYYY-MM-DD format
-            day: activity.date.toLocaleDateString('en-US', { weekday: 'short' }), // Short weekday name
-            waterMl: activity.water,
-            goalMl: goalMl,
-            progress: progress,
-        };
-    });
-  
-      res.status(200).json(waterData);
-    } catch (error) {
-      console.error("Error fetching water status:", error);
-      res.status(500).json({ message: "Internal Server Error", details: error.message });
+  const { id } = req.params;
+  const { waterGoal } = req.body;
+
+  console.log("🟡 Patient ID:", id);
+  console.log("🟡 Water Goal received:", waterGoal);
+
+  if (!waterGoal || isNaN(waterGoal)) {
+    console.error("❌ Invalid water goal received:", waterGoal);
+    return res.status(400).json({ message: "Invalid water goal value. Must be a number." });
+  }
+
+  try {
+    const patient = await prisma.patient.findUnique({ where: { id: String(id) } });
+
+    if (!patient) {
+      console.error("❌ Patient not found for ID:", id);
+      return res.status(400).json({ message: "Patient not found." });
     }
+
+    const activity = await findOrCreateActivity(id);
+
+    if (!activity || !activity.id) {
+      console.error("❌ Activity creation failed for patient:", id);
+      return res.status(500).json({ message: "Error finding or creating patient activity." });
+    }
+
+    const updatedActivity = await prisma.patientActivity.update({
+      where: { id: activity.id },
+      data: { waterGoal: parseInt(waterGoal) },
+    });
+
+    console.log("✅ Water goal updated successfully:", updatedActivity.waterGoal);
+    
+    res.status(200).json(updatedActivity);
+  } catch (error) {
+    console.error("❌ Error updating water goal:", error);
+    res.status(500).json({ message: "Error updating water goal", error: error.message });
+  }
 };
 
+
+const getWaterStatus = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0); // Set to midnight
+
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(today.getDate() - 6); // Calculate 7 days ago
+
+    const patient = await prisma.patient.findUnique({ // Fetch patient data including waterGoal
+      where: { id: String(id) },
+    });
+
+    if (!patient) {
+      return res.status(400).json({ message: "Patient not found." });
+    }
+
+    const activities = await prisma.patientActivity.findMany({
+      where: {
+        patientId: String(id),
+        date: {
+          gte: sevenDaysAgo,
+          lte: today,
+        },
+      },
+      orderBy: { date: 'asc' },
+    });
+
+    const waterData = activities.map(activity => {
+      const goalMl = activity.waterGoal || 0; // Default goal is 2500 ml
+      console.log(goalMl);
+
+      return {
+          id: activity.id,
+          date: activity.date.toISOString().split("T")[0], // Date in YYYY-MM-DD format
+          day: activity.date.toLocaleDateString('en-US', { weekday: 'short' }), // Short weekday name
+          waterMl: activity.water,
+          goalMl: goalMl, // Fixed: changed 'wate' to 'goalMl'
+      };
+  });
+
+    res.status(200).json(waterData);
+  } catch (error) {
+    console.error("Error fetching water status:", error);
+    res.status(500).json({ message: "Internal Server Error", details: error.message });
+  }
+};
 // Log Sleep Duration
 const logSleepDuration = async (req, res) => {
     try {
@@ -1064,6 +1108,7 @@ const createNote = async (req, res) => {
 export default {
     getUserActivities,
     logWaterIntake,
+    WaterGoal,
     getWaterStatus,
     logSleepDuration,
     getSleepStatus,

@@ -5,6 +5,7 @@ const router = new Router();
 
 // Route to create a new user activity
 router.post('/user/activity/:id/water', activityController.logWaterIntake);
+router.post('/user/activity/:id/waterGoal', activityController.WaterGoal);
 router.get('/user/activity/:id/waterstatus', activityController.getWaterStatus);
 router.post('/user/activity/:id/weight', activityController.logWeight);
 router.get('/user/activity/:id/weightstatus', activityController.getWeightStatus);
