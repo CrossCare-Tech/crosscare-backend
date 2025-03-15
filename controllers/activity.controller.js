@@ -858,11 +858,9 @@ const createNote = async (req, res) => {
 
   const addMedication = async (req, res) => {
     try {
-      // Get patientId from URL - modified to use patientId directly
       const { id: patientId } = req.params; 
       const { medicationName, startDate, endDate, days, times } = req.body;
   
-      // Validate required fields
       if (!medicationName || !startDate || !days || !times || days.length === 0 || times.length === 0) {
         return res.status(400).json({ 
           success: false,
@@ -870,7 +868,6 @@ const createNote = async (req, res) => {
         });
       }
       
-      // Check if the patient exists
       const patient = await prisma.patient.findUnique({
         where: { id: patientId }
       });
@@ -882,9 +879,8 @@ const createNote = async (req, res) => {
         });
       }
   
-      // Find or create PatientActivity for today
       const today = new Date();
-      today.setHours(0, 0, 0, 0); // Set to midnight
+      today.setHours(0, 0, 0, 0);
   
       let patientActivity = await prisma.patientActivity.findFirst({
         where: {
@@ -893,7 +889,6 @@ const createNote = async (req, res) => {
         }
       });
   
-      // If no activity exists for today, create one
       if (!patientActivity) {
         patientActivity = await prisma.patientActivity.create({
           data: {
@@ -903,13 +898,10 @@ const createNote = async (req, res) => {
         });
       }
   
-      // Format dates properly
       const formattedStartDate = new Date(startDate);
       const formattedEndDate = endDate ? new Date(endDate) : null;
       
-      // Format times (assuming times come as string array like ["08:00", "20:00"])
       const formattedTimes = times.map(time => {
-        // Create a date object for each time
         const [hours, minutes] = time.split(':');
         const timeDate = new Date();
         timeDate.setHours(parseInt(hours, 10));
@@ -1016,7 +1008,7 @@ const createNote = async (req, res) => {
       
       // Group medications by active status (current vs. past)
       const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      today.setUTCHours(0, 0, 0, 0);
       
       const activeMedications = formattedMedications.filter(med => {
         const endDate = med.endDate ? new Date(med.endDate) : null;
@@ -1030,10 +1022,8 @@ const createNote = async (req, res) => {
       
       return res.status(200).json({
         success: true,
-        data: {
-          active: activeMedications,
+          data: activeMedications,
           past: pastMedications
-        }
       });
       
     } catch (error) {
@@ -1045,69 +1035,64 @@ const createNote = async (req, res) => {
       });
     }
   };
+
+  
   const markMedicationCompleted = async (req, res) => {
     try {
-      // Log all params to debug
-      console.log("Request params:", req.params);
-      
-      // Check which parameter contains the medication ID
-      const medicationId = req.params.medicationId || req.params.id;
-      
-      // Log the extracted medication ID
-      console.log("Medication ID:", medicationId);
-      
-      const { completed } = req.body;
-      
-      // Log request body
-      console.log("Request body:", req.body);
-  
-      // Validate required fields
-      if (completed === undefined) {
-        return res.status(400).json({ 
-          success: false,
-          message: "Completed status is required" 
+        console.log("Request params:", req.params);
+        const medicationId = req.params.medicationId || req.params.id;
+        console.log("Medication ID:", medicationId);
+        const { completed } = req.body;
+        console.log("Request body:", req.body);
+
+        if (completed === undefined) {
+            return res.status(400).json({ 
+                success: false,
+                message: "Completed status is required" 
+            });
+        }
+
+        if (!medicationId) {
+            return res.status(400).json({
+                success: false,
+                message: "Medication ID is required"
+            });
+        }
+
+        // Log before querying the database
+        console.log("Querying database for medication ID:", medicationId);
+
+        const medication = await prisma.medication.findUnique({
+            where: { id: medicationId }
         });
-      }
-  
-      // Verify medication ID is not undefined
-      if (!medicationId) {
-        return res.status(400).json({
-          success: false,
-          message: "Medication ID is required"
+
+        if (!medication) {
+            console.error("Medication not found for ID:", medicationId);
+            return res.status(404).json({
+                success: false,
+                message: "Medication not found"
+            });
+        }
+
+        console.log("Medication found:", medication);
+
+        const updatedMedication = await prisma.medication.update({
+            where: { id: medicationId },
+            data: { completed }
         });
-      }
-  
-      // Check if medication exists
-      const medication = await prisma.medication.findUnique({
-        where: { id: medicationId }
-      });
-  
-      if (!medication) {
-        return res.status(404).json({
-          success: false,
-          message: "Medication not found"
+
+        return res.status(200).json({
+            success: true,
+            message: `Medication ${completed ? 'marked as completed' : 'marked as incomplete'}`,
+            data: updatedMedication
         });
-      }
-  
-      // Update medication completion status
-      const updatedMedication = await prisma.medication.update({
-        where: { id: medicationId },
-        data: { completed }
-      });
-  
-      return res.status(200).json({
-        success: true,
-        message: `Medication ${completed ? 'marked as completed' : 'marked as incomplete'}`,
-        data: updatedMedication
-      });
     } catch (error) {
-      console.error("Error updating medication completion status:", error);
-      console.error("Error details:", error.stack);
-      return res.status(500).json({
-        success: false,
-        message: "Failed to update medication completion status",
-        error: error.message
-      });
+        console.error("Error updating medication completion status:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to update medication completion status",
+            error: error.message
+        });
     }
   };
 
