@@ -198,7 +198,7 @@ const getWaterStatus = async (req, res) => {
 
     const waterData = activities.map(activity => {
       const goalMl = activity.waterGoal || 0; // Default goal is 2500 ml
-      console.log(goalMl);
+      // console.log(goalMl);
 
       return {
           id: activity.id,
@@ -217,6 +217,7 @@ const getWaterStatus = async (req, res) => {
 };
 // Log Sleep Duration
 const logSleepDuration = async (req, res) => {
+  console.log("hi")
     try {
         const { id } = req.params;
         let { date, sleepStart, sleepEnd } = req.body;
@@ -232,11 +233,11 @@ const logSleepDuration = async (req, res) => {
             return res.status(404).json({ message: "Patient not found." });
         }
 
-        // Normalize date or use today's date
+        // Normalize date or use today's date in UTC
         date = date ? new Date(date) : new Date();
-        date.setHours(12, 0, 0, 0); // Set to midnight to prevent timezone issues
+        date.setUTCHours(0, 0, 0, 0); // Set to UTC midnight
 
-        // Function to convert 12-hour AM/PM time to Date object
+        // Function to convert 12-hour AM/PM time to Date object in UTC
         const parseTimeString = (timeStr, baseDate) => {
             if (!timeStr.includes("AM") && !timeStr.includes("PM")) {
                 throw new Error(`Invalid time format: ${timeStr}`);
@@ -248,18 +249,23 @@ const logSleepDuration = async (req, res) => {
             if (period.toLowerCase() === "am" && hours === 12) hours = 0;
 
             const parsedDate = new Date(baseDate);
-            parsedDate.setHours(hours, minutes, 0, 0);
+            parsedDate.setUTCHours(hours, minutes, 0, 0); // Use setUTCHours to ensure UTC time
             return parsedDate;
         };
 
-        // Convert sleep times to Date objects
+        // Convert sleep times to Date objects in UTC
         const sleepStartTime = parseTimeString(sleepStart, date);
         let sleepEndTime = parseTimeString(sleepEnd, date);
 
+        console.log("Parsed Sleep Start Time (UTC):", sleepStartTime.toISOString());
+        console.log("Parsed Sleep End Time (UTC):", sleepEndTime.toISOString());
+
         // Adjust for overnight sleep (e.g., 11 PM - 7 AM)
         if (sleepEndTime <= sleepStartTime) {
-            sleepEndTime.setDate(sleepEndTime.getDate() + 1);
+            sleepEndTime.setUTCDate(sleepEndTime.getUTCDate() + 1);
         }
+
+        console.log("Adjusted Sleep End Time (UTC):", sleepEndTime.toISOString());
 
         // Find or create activity for the given patient and date
         let activity = await prisma.patientActivity.findFirst({
@@ -316,11 +322,10 @@ const getSleepStatus = async (req, res) => {
         }
 
         const today = new Date();
-        // Use local midnight time instead of UTC
-        today.setHours(0, 0, 0, 0);
+        today.setHours(0, 0, 0, 0); // Set to UTC midnight
 
         const sevenDaysAgo = new Date(today);
-        sevenDaysAgo.setDate(today.getDate() - 6);
+        sevenDaysAgo.setUTCDate(today.getUTCDate() - 6);
 
         const patient = await prisma.patient.findUnique({ where: { id: String(id) } });
 
@@ -334,7 +339,7 @@ const getSleepStatus = async (req, res) => {
                 patientId: String(id), 
                 // date: { gte: sevenDaysAgo, lte: today } 
             },
-            orderBy: { date: "asc" },
+            orderBy: { date: "desc" },
             select: {
                 id: true,
                 date: true,
@@ -360,18 +365,20 @@ const getSleepStatus = async (req, res) => {
         };
 
         // Process the activities directly without filling in missing days
-        const sleepData = activities.map(activity => {
-            const activityDate = new Date(activity.date);
-            const formattedDate = `${activityDate.getFullYear()}-${String(activityDate.getMonth() + 1).padStart(2, '0')}-${String(activityDate.getDate()).padStart(2, '0')}`;
-            return {
-                id: activity.id,
-                day: new Date(activity.date).toLocaleDateString("en-US", { weekday: "short" }),
-                date: formattedDate,
-                sleepStart: activity.sleepStart ? new Date(activity.sleepStart).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }) : null,
-                sleepEnd: activity.sleepEnd ? new Date(activity.sleepEnd).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }) : null,
-                duration: activity.sleepStart && activity.sleepEnd ? calculateDuration(activity.sleepStart, activity.sleepEnd) : "0 hr",
-            };
-        });
+        const sleepData = activities
+            .filter(activity => activity.sleepStart !== null || activity.sleepEnd !== null)
+            .map(activity => {
+                const activityDate = new Date(activity.date);
+                const formattedDate = `${activityDate.getUTCFullYear()}-${String(activityDate.getUTCMonth() + 1).padStart(2, '0')}-${String(activityDate.getUTCDate()).padStart(2, '0')}`;
+                return {
+                    id: activity.id,
+                    day: new Date(activity.date).toLocaleDateString("en-US", { weekday: "short" }),
+                    date: formattedDate,
+                    sleepStart: activity.sleepStart ? new Date(activity.sleepStart).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "UTC" }) : null,
+                    sleepEnd: activity.sleepEnd ? new Date(activity.sleepEnd).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "UTC" }) : null,
+                    duration: activity.sleepStart && activity.sleepEnd ? calculateDuration(activity.sleepStart, activity.sleepEnd) : "0 hr",
+                };
+            });
 
         res.status(200).json(sleepData);
     } catch (error) {
