@@ -52,7 +52,7 @@ const getUserActivities = async (req, res) => {
 // Find or create activity for today
 const findOrCreateActivity = async (patientId) => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Set time to midnight
+    today.setUTCHours(0, 0, 0, 0); // Set time to midnight
 
     // Check if an activity exists for today
     let activity = await prisma.patientActivity.findFirst({
@@ -69,7 +69,8 @@ const findOrCreateActivity = async (patientId) => {
                 patientId: String(patientId),
                 date: today,
                 water: 0,
-                steps: 0,
+                steps: patientId.stepGoal || 0,
+                stepsGoal: 0,
                 heart_rate: 0,
                 weight: 0,
                 weight_unit: "kg",
@@ -444,41 +445,108 @@ const logHeartRate = async (req, res) => {
 
 // Log Steps
 const logSteps = async (req, res) => {
-    const { id } = req.params; // patientId
-    const { steps } = req.body;
-    console.log("req.params:", req.params);
-    console.log("logWaterIntake id:", id);
-    console.log("Weight Unit:", steps);
+  const { id } = req.params; // Patient ID
+  const { stepsGoal } = req.body;
 
-    try {
+  console.log("req.params:", req.params);
+  console.log("logSteps id:", id);
+  console.log("Steps:", stepsGoal);
 
-        const patient = await prisma.patient.findUnique({
-            where: { id: id },
-        });
+  try {
+      const patient = await prisma.patient.findUnique({
+          where: { id: id },
+      });
 
-        if (!patient) {
-            return res.status(400).json({ message: "Patient not found." });
-        }
+      if (!patient) {
+          return res.status(400).json({ message: "Patient not found." });
+      }
 
-        const activity = await findOrCreateActivity(id); // Ensure this function handles activity creation properly
+      // Find or create an activity for the patient
+      const activity = await findOrCreateActivity(id); 
 
-        const updatedActivity = await prisma.patientActivity.update({
-            where: {
-                id: activity.id
-            },
-            data: {
-                steps: steps // Use correct field name
-            }
-        });
+      // Update only the `steps` field
+      await prisma.patientActivity.update({
+          where: {
+              id: activity.id
+          },
+          data: {
+            stepsGoal: stepsGoal
+          }
+      });
 
-        res.status(200).json({
-            steps: updatedActivity.steps,
-        });
-    } catch (error) {
-        console.error("Error logging steps:", error); // Log error for debugging
-        res.status(500).json({ message: "Error logging steps", error: error.message || error });
-    }
+      // Fetch updated activity to ensure correct `stepsGoal`
+      const updatedActivity = await prisma.patientActivity.findUnique({
+          where: { id: activity.id },
+          select: {
+              id: true,
+              date: true,
+              steps: true,
+              stepsGoal: true // Ensure this field is included
+          }
+      });
+
+      res.status(200).json({
+          id: updatedActivity.id,
+          date: updatedActivity.date.toISOString().split("T")[0], // Format as YYYY-MM-DD
+          day: updatedActivity.date.toLocaleDateString("en-US", { weekday: "short" }), // Short weekday name
+          steps: updatedActivity.steps,
+          stepGoal: updatedActivity.stepsGoal ||0 , // Default to 5000 if undefined
+      });
+  } catch (error) {
+      console.error("Error logging steps:", error);
+      res.status(500).json({ message: "Error logging steps", error: error.message || error });
+  }
 };
+
+const getStepsStatus = async (req, res) => {
+  const { id } = req.params; // Patient ID
+
+  try {
+      if (!id) {
+          return res.status(400).json({ message: "Patient ID is required." });
+      }
+
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0); // Normalize today's date
+
+      const sevenDaysAgo = new Date(today);
+      sevenDaysAgo.setUTCDate(today.getUTCDate() - 6); // Get data for the last 7 days
+
+      const patient = await prisma.patient.findUnique({
+          where: { id: String(id) },
+      });
+
+      if (!patient) {
+          return res.status(404).json({ message: "Patient not found." });
+      }
+
+      // Fetch step activity for the past 7 days
+      const activities = await prisma.patientActivity.findMany({
+          where: {
+              patientId: String(id),
+              date: {
+                  gte: sevenDaysAgo,
+                  lte: today,
+              },
+          },
+          orderBy: { date: "desc" },
+      });
+
+      const stepsData = activities.map(activity => ({
+          id: activity.id,
+          date: activity.date.toISOString().split("T")[0], // Format as YYYY-MM-DD
+          day: activity.date.toLocaleDateString("en-US", { weekday: "short" }), // Short weekday name
+          steps: activity.steps || 0,
+          stepsGoal: activity.stepsGoal || 0, // Assuming stepGoals is stored in the DB
+      }));
+
+      res.status(200).json(stepsData);
+  } catch (error) {
+      console.error("Error fetching step status:", error);
+      res.status(500).json({ message: "Error fetching step status", error: error.message });
+  }
+};
+
 // Log Weight
 const logWeight = async (req, res) => {
     const { id } = req.params;
@@ -937,164 +1005,193 @@ const createNote = async (req, res) => {
     }
   };
 
-  const getMedications = async (req, res) => {
+const getMedications = async (req, res) => {
     try {
-      const { id } = req.params; // patientId
-      const { startDate, endDate } = req.query; // Optional date filters
-      
-      // Check if patient exists
-      const patient = await prisma.patient.findUnique({
-        where: { id }
-      });
-      
-      if (!patient) {
-        return res.status(404).json({
-          success: false,
-          message: "Patient not found"
-        });
-      }
-      
-      // Build query for medications
-      let query = {
-        where: {
-          patientActivity: {
-            patientId: id
-          }
-        },
-        orderBy: {
-          startDate: 'asc'
-        },
-        include: {
-          patientActivity: {
-            select: {
-              date: true
-            }
-          }
-        }
-      };
-      
-      // Add date filters if provided
-      if (startDate || endDate) {
-        query.where.startDate = {};
-        
-        if (startDate) {
-          query.where.startDate.gte = new Date(startDate);
-        }
-        
-        if (endDate) {
-          query.where.startDate.lte = new Date(endDate);
-        }
-      }
-      
-      // Get medications
-      const medications = await prisma.medication.findMany(query);
-      
-      // Format the medication data
-      const formattedMedications = medications.map(med => {
-        return {
-          id: med.id,
-          medicationName: med.medicationName,
-          patientActivityId: med.patientActivityId,
-          startDate: med.startDate.toISOString().split('T')[0], // Format as YYYY-MM-DD
-          endDate: med.endDate ? med.endDate.toISOString().split('T')[0] : null,
-          days: med.days,
-          times: med.times.map(time => 
-            time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
-          ),
-          activityDate: med.patientActivity.date.toISOString().split('T')[0],
-          completed: med.completed // Include the completed status here
-        };
-      });
-      
-      // Group medications by active status (current vs. past)
-      const today = new Date();
-      today.setUTCHours(0, 0, 0, 0);
-      
-      const activeMedications = formattedMedications.filter(med => {
-        const endDate = med.endDate ? new Date(med.endDate) : null;
-        return !endDate || endDate >= today;
-      });
-      
-      const pastMedications = formattedMedications.filter(med => {
-        const endDate = med.endDate ? new Date(med.endDate) : null;
-        return endDate && endDate < today;
-      });
-      
-      return res.status(200).json({
-        success: true,
-          data: activeMedications,
-          past: pastMedications
-      });
-      
-    } catch (error) {
-      console.error("Error fetching medications:", error);
-      return res.status(500).json({
-        success: false,
-        message: "Failed to fetch medications",
-        error: error.message
-      });
-    }
-  };
+        const { id } = req.params;
+        const { startDate, endDate } = req.query;
 
-  
-  const markMedicationCompleted = async (req, res) => {
-    try {
-        console.log("Request params:", req.params);
-        const medicationId = req.params.medicationId || req.params.id;
-        console.log("Medication ID:", medicationId);
-        const { completed } = req.body;
-        console.log("Request body:", req.body);
+        // Check if patient exists
+        const patient = await prisma.patient.findUnique({ where: { id } });
 
-        if (completed === undefined) {
-            return res.status(400).json({ 
-                success: false,
-                message: "Completed status is required" 
-            });
-        }
-
-        if (!medicationId) {
-            return res.status(400).json({
-                success: false,
-                message: "Medication ID is required"
-            });
-        }
-
-        // Log before querying the database
-        console.log("Querying database for medication ID:", medicationId);
-
-        const medication = await prisma.medication.findUnique({
-            where: { id: medicationId }
-        });
-
-        if (!medication) {
-            console.error("Medication not found for ID:", medicationId);
+        if (!patient) {
             return res.status(404).json({
                 success: false,
-                message: "Medication not found"
+                message: "Patient not found"
             });
         }
 
-        console.log("Medication found:", medication);
+        // Build query for medications
+        let query = {
+            where: {
+                patientActivity: { patientId: id }
+            },
+            orderBy: { startDate: 'asc' },
+            include: {
+                patientActivity: { select: { date: true } }
+            }
+        };
 
-        const updatedMedication = await prisma.medication.update({
-            where: { id: medicationId },
-            data: { completed }
+        // Add date filters if provided
+        if (startDate || endDate) {
+            query.where.startDate = {};
+
+            if (startDate) query.where.startDate.gte = new Date(startDate);
+            if (endDate) query.where.startDate.lte = new Date(endDate);
+        }
+
+        // Fetch all medications for the patient
+        const medications = await prisma.medication.findMany(query);
+
+        // ✅ Group medications by their date
+        const groupedMedications = medications.reduce((acc, med) => {
+            const dateKey = med.startDate.toISOString().split('T')[0];
+
+            if (!acc[dateKey]) {
+                acc[dateKey] = { medications: [] };
+            }
+
+            acc[dateKey].medications.push(med);
+            return acc;
+        }, {});
+
+        // ✅ Process each medication entry, ensuring completion is date-specific
+        const formattedMedications = Object.entries(groupedMedications).flatMap(([date, data]) => {
+            return data.medications.map(med => ({
+                id: med.id,
+                medicationName: med.medicationName,
+                patientActivityId: med.patientActivityId,
+                startDate: med.startDate.toISOString().split('T')[0],
+                endDate: med.endDate ? med.endDate.toISOString().split('T')[0] : null,
+                days: med.days,
+                times: med.times.map(time => 
+                    time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+                ),
+                activityDate: med.patientActivity.date.toISOString().split('T')[0],
+                completed: (med.completedDates ?? []).includes(date) // ✅ Check if this specific date was completed
+            }));
+        });
+
+        // ✅ Group medications by active status (current vs. past)
+        const today = new Date();
+        today.setUTCHours(0, 0, 0, 0);
+
+        const activeMedications = formattedMedications.filter(med => {
+            const endDate = med.endDate ? new Date(med.endDate) : null;
+            return !endDate || endDate >= today;
+        });
+
+        const pastMedications = formattedMedications.filter(med => {
+            const endDate = med.endDate ? new Date(med.endDate) : null;
+            return endDate && endDate < today;
         });
 
         return res.status(200).json({
             success: true,
-            message: `Medication ${completed ? 'marked as completed' : 'marked as incomplete'}`,
-            data: updatedMedication
+            data: activeMedications,
+            past: pastMedications
         });
+
     } catch (error) {
-        console.error("Error updating medication completion status:", error);
+        console.error("Error fetching medications:", error);
         return res.status(500).json({
             success: false,
-            message: "Failed to update medication completion status",
+            message: "Failed to fetch medications",
             error: error.message
         });
     }
-  };
+};
+
+
+
+const markMedicationCompleted = async (req, res) => {
+  try {
+      console.log("Request params:", req.params);
+      const medicationId = req.params.medicationId || req.params.id;
+      console.log("Medication ID:", medicationId);
+
+      const { completed, date } = req.body;
+      console.log("Request body:", req.body);
+
+      if (completed === undefined) {
+          return res.status(400).json({ 
+              success: false,
+              message: "Completed status is required."
+          });
+      }
+
+      if (!medicationId) {
+          return res.status(400).json({
+              success: false,
+              message: "Medication ID is required."
+          });
+      }
+
+      if (!date) {
+          return res.status(400).json({
+              success: false,
+              message: "Completion date is required."
+          });
+      }
+
+      // Convert input date to a JavaScript Date object
+      const formattedDate = new Date(date);
+      formattedDate.setUTCHours(0, 0, 0, 0);
+      
+      if (isNaN(formattedDate)) {
+          return res.status(400).json({
+              success: false,
+              message: "Invalid date format. Use YYYY-MM-DD."
+          });
+      }
+
+      // Fetch the specific medication
+      const medication = await prisma.medication.findUnique({
+          where: { id: medicationId }
+      });
+
+      if (!medication) {
+          console.error("Medication not found for ID:", medicationId);
+          return res.status(404).json({
+              success: false,
+              message: "Medication not found."
+          });
+      }
+
+      console.log("Medication found:", medication);
+
+      // Retrieve existing completed dates, or initialize an empty array
+      let completedDates = medication.completedDates || [];
+
+      if (completed) {
+          // ✅ Add the specific date if marking as completed
+          if (!completedDates.includes(formattedDate.toISOString().split('T')[0])) {
+              completedDates.push(formattedDate.toISOString().split('T')[0]);
+          }
+      } else {
+          // ❌ Remove the date if marking as incomplete
+          completedDates = completedDates.filter(d => d !== formattedDate.toISOString().split('T')[0]);
+      }
+
+      // ✅ Update medication with completedDates array
+      const updatedMedication = await prisma.medication.update({
+          where: { id: medicationId },
+          data: { completedDates }
+      });
+
+      return res.status(200).json({
+          success: true,
+          message: `Medication ${completed ? 'marked as completed' : 'marked as incomplete'} on ${date}.`,
+          data: updatedMedication
+      });
+  } catch (error) {
+      console.error("Error updating medication completion status:", error);
+      return res.status(500).json({
+          success: false,
+          message: "Failed to update medication completion status.",
+          error: error.message
+      });
+  }
+};
 
 
 export default {
@@ -1113,5 +1210,6 @@ export default {
     getUserNotes,
     addMedication,
     getMedications,
+    getStepsStatus,
     markMedicationCompleted
 };

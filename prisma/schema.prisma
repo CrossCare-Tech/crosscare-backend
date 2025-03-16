@@ -44,6 +44,7 @@ model PatientActivity {
   water          Int?
   waterGoal      Int?
   steps          Int?
+  stepsGoal      Int?
   sleepStart     DateTime?
   sleepEnd       DateTime?
   meal           Meals[]
@@ -74,6 +75,7 @@ model Medication {
   startDate        DateTime
   endDate          DateTime?
   completed       Boolean   @default(false)
+  completedDates  String[] @default([]) 
   days             String[]  // This will store the days of the week (e.g., ["M", "T", "W"])
   times            DateTime[] // This will store the times for medication
   createdAt        DateTime @default(now())

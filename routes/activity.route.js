@@ -10,6 +10,7 @@ router.get('/user/activity/:id/waterstatus', activityController.getWaterStatus);
 router.post('/user/activity/:id/weight', activityController.logWeight);
 router.get('/user/activity/:id/weightstatus', activityController.getWeightStatus);
 router.post('/user/activity/:id/steps', activityController.logSteps);
+router.get('/user/activity/:id/stepsStatus', activityController.getStepsStatus);
 router.post('/user/activity/:id/sleep', activityController.logSleepDuration);
 router.get('/user/activity/:id/sleepstatus', activityController.getSleepStatus);
 router.delete('/user/activity/:id/sleepstatus/delete/:id', activityController.deleteSleepStatus);
