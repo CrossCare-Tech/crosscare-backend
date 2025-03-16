@@ -587,65 +587,86 @@ const logWeight = async (req, res) => {
 };
 
 const getWeightStatus = async (req, res) => {
-    const { id } = req.params; // Assuming patient ID is in req.params.id
-  
-    try {
-      // Get current date and set to start of day
+  const { id } = req.params; // Patient ID
+
+  try {
+      // Get today's date in UTC and normalize to start of the day
       const today = new Date();
-      today.setHours(12, 0, 0, 0);
-  
-      // Calculate 7 days ago
+      today.setUTCHours(0, 0, 0, 0);
+
+      // Calculate the start of the 7-day period
       const sevenDaysAgo = new Date(today);
       sevenDaysAgo.setDate(today.getDate() - 6);
-  
-      // Get activities for the last 7 days
+
+      // Fetch all weight logs for the last 7 days
       const activities = await prisma.patientActivity.findMany({
-        where: {
-          patientId: String(id),
-          date: {
-            gte: sevenDaysAgo,
-            lte: new Date(), // Use current date and time to include today's entries
+          where: {
+              patientId: String(id),
+              date: {
+                  gte: sevenDaysAgo,
+                  lte: today,
+              },
+              weight: { not: null }, // Only include logs where weight was recorded
           },
-          weight: { not: null }, // Only include activities with weight data
-        },
-        orderBy: { date: 'asc' },
+          orderBy: { date: "asc" },
       });
-  
+
       // Helper function to format date as YYYY-MM-DD
-      const formatDateYYYYMMDD = (date) => {
-        return date.toISOString().split('T')[0]; // Gets the YYYY-MM-DD part
-      };
-  
-      // Find the last logged weight
+      const formatDateYYYYMMDD = (date) => date.toISOString().split("T")[0];
+
+      // Initialize variables for tracking weight
+      let lastLoggedWeight = null;
+      let lastLoggedWeightUnit = "kg"; // Default unit
+
+      // ✅ Ensure each day in the range has a weight log
+      const weightData = [];
+      for (let i = 0; i < 7; i++) {
+          const currentDate = new Date(sevenDaysAgo);
+          currentDate.setDate(sevenDaysAgo.getDate() + i);
+          const dateKey = formatDateYYYYMMDD(currentDate);
+
+          // Find an activity log for this specific date
+          const activity = activities.find(act => formatDateYYYYMMDD(act.date) === dateKey);
+
+          if (activity) {
+              // ✅ Update last known weight only when there is a new entry
+              lastLoggedWeight = activity.weight;
+              lastLoggedWeightUnit = activity.weight_unit;
+          }
+
+          // ✅ Persist last known weight for missing days
+          weightData.push({
+              day: currentDate.toLocaleDateString("en-US", { weekday: "short" }),
+              date: dateKey,
+              weight: lastLoggedWeight !== null ? lastLoggedWeight : (weightData.length > 0 ? weightData[weightData.length - 1].weight : 0),
+              weight_unit: lastLoggedWeightUnit,
+          });
+      }
+
+      // ✅ Find the last recorded weight for display
       const lastActivity = activities.length > 0 ? activities[activities.length - 1] : null;
-      const lastWeight = lastActivity ? lastActivity.weight : null;
-      const lastWeightUnit = lastActivity ? lastActivity.weight_unit : null;
-      const lastWeightDate = lastActivity ? formatDateYYYYMMDD(lastActivity.date) : null;
-  
-      // Prepare data for the bar graph
-      const weightData = activities.map(activity => ({
-        day: activity.date.toLocaleDateString('en-US', { weekday: 'short' }),
-        weight: activity.weight,
-        weight_unit: activity.weight_unit,
-        date: formatDateYYYYMMDD(activity.date) // Format as YYYY-MM-DD
-      }));
-  
+      const lastWeight = lastActivity ? lastActivity.weight : lastLoggedWeight;
+      const lastWeightUnit = lastActivity ? lastActivity.weight_unit : lastLoggedWeightUnit;
+
       res.status(200).json({
-        success: true,
-        data: {
-          lastWeight: lastWeight,
-          weightData: weightData,
-        }
+          success: true,
+          data: {
+              lastWeight: lastWeight,
+              weightData: weightData,
+          }
       });
-    } catch (error) {
+
+  } catch (error) {
       console.error("Error fetching weight status:", error);
-      res.status(500).json({ 
-        success: false, 
-        message: "Error fetching weight status", 
-        error: error.message 
+      res.status(500).json({
+          success: false,
+          message: "Error fetching weight status",
+          error: error.message
       });
-    }
-  };
+  }
+};
+
+
 
 const createNote = async (req, res) => {
     try {
