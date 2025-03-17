@@ -3,86 +3,94 @@ const prisma = new PrismaClient();
 
 // Fetch user activities
 const getUserActivities = async (req, res) => {
-    const { id } = req.params;
-    
-    try {
-        const activities = await prisma.patientActivity.findMany({
-            where: { patientId: String(id) },
-            orderBy: { date: "asc" } // Ensure order
-        });
+  const { id } = req.params;
+  
+  try {
+      const activities = await prisma.patientActivity.findMany({
+          where: { patientId: String(id) },
+          orderBy: { date: "asc" }
+      });
 
-        const mergedActivities = activities.reduce((acc, activity) => {
-            const date = activity.date.toISOString().split("T")[0];
+      const mergedActivities = activities.reduce((acc, activity) => {
+          const date = activity.date.toISOString().split("T")[0];
 
-            if (!acc[date]) {
-                acc[date] = {
-                    date,
-                    details: {
-                        water: 0,
-                        waterGoal:0,
-                        heart: 0,
-                        sleep: { start: null, end: null },
-                        steps: 0,
-                        weight: { value: 0, unit: "kg" }
-                    }
-                };
-            }
+          if (!acc[date]) {
+              acc[date] = {
+                  date,
+                  details: {
+                      water: 0,
+                      waterGoal: activity.waterGoal || 0, // ✅ Include goal
+                      heart: 0,
+                      sleep: { start: null, end: null },
+                      steps: 0,
+                      stepsGoal: activity.stepsGoal || 0, // ✅ Include goal
+                      weight: { value: 0, unit: "kg" }
+                  }
+              };
+          }
 
-            // Merge values
-            acc[date].details.water += activity.water || 0;
-            acc[date].details.heart = Math.max(acc[date].details.heart, activity.heart_rate || 0);
-            acc[date].details.steps += activity.steps || 0;
-            acc[date].details.weight.value = activity.weight || acc[date].details.weight.value;
-            acc[date].details.weight.unit = activity.weight_unit || acc[date].details.weight.unit;
+          // Merge values
+          acc[date].details.water += activity.water || 0;
+          acc[date].details.heart = Math.max(acc[date].details.heart, activity.heart_rate || 0);
+          acc[date].details.steps += activity.steps || 0;
+          acc[date].details.weight.value = activity.weight || acc[date].details.weight.value;
+          acc[date].details.weight.unit = activity.weight_unit || acc[date].details.weight.unit;
 
-            // Use the latest sleep data (if available)
-            if (activity.sleepStart) acc[date].details.sleep.start = activity.sleepStart;
-            if (activity.sleepEnd) acc[date].details.sleep.end = activity.sleepEnd;
+          if (activity.sleepStart) acc[date].details.sleep.start = activity.sleepStart;
+          if (activity.sleepEnd) acc[date].details.sleep.end = activity.sleepEnd;
 
-            return acc;
-        }, {});
+          return acc;
+      }, {});
 
-        res.status(200).json(Object.values(mergedActivities));
-    } catch (error) {
-        console.error("Error fetching activities:", error);
-        res.status(500).json({ message: "Internal Server Error", details: error.message });
-    }
+      res.status(200).json(Object.values(mergedActivities));
+  } catch (error) {
+      console.error("Error fetching activities:", error);
+      res.status(500).json({ message: "Internal Server Error", details: error.message });
+  }
 };
 
 // Find or create activity for today
 const findOrCreateActivity = async (patientId) => {
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0); // Set time to midnight
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0); // Normalize to start of day UTC
 
-    // Check if an activity exists for today
-    let activity = await prisma.patientActivity.findFirst({
-        where: {
-            patientId: String(patientId),
-            date: today,
-        },
-    });
+  // Check if an activity exists for today
+  let activity = await prisma.patientActivity.findFirst({
+      where: {
+          patientId: String(patientId),
+          date: today,
+      },
+  });
 
-    // If no activity is found, create a new one
-    if (!activity) {
-        activity = await prisma.patientActivity.create({
-            data: {
-                patientId: String(patientId),
-                date: today,
-                water: 0,
-                steps: patientId.stepGoal || 0,
-                stepsGoal: 0,
-                heart_rate: 0,
-                weight: 0,
-                weight_unit: "kg",
-                notetaking: "",
-                wombPicture: "", // Provide an empty string as a default value
-                waterGoal: patientId.waterGoal || 0,
-            },
-        });
-    }
+  // Fetch patient to get default goals
+  const patient = await prisma.patient.findUnique({
+      where: { id: String(patientId) },
+  });
 
-    return activity;
+  if (!patient) throw new Error("Patient not found");
+
+  // If no activity is found, create a new one with default values
+  if (!activity) {
+      activity = await prisma.patientActivity.create({
+          data: {
+              patientId: String(patientId),
+              date: today,
+              water: 0,
+              waterGoal: patient.waterGoal || 0, // Default to 2500 ml if not set
+              steps: 0,
+              stepsGoal: patient.stepsGoal || 0, // Default to 5000 steps if not set
+              heart_rate: 0,
+              weight: null,
+              weight_unit: "kg",
+              notetaking: "",
+              wombPicture: "",
+          },
+      });
+  }
+
+  return activity;
 };
+
 
 // Log Water Intake
 const logWaterIntake = async (req, res) => {
@@ -549,56 +557,55 @@ const getStepsStatus = async (req, res) => {
 
 // Log Weight
 const logWeight = async (req, res) => {
-    const { id } = req.params;
-    console.log("req.params:", req.params);
-    console.log("logWaterIntake id:", id);
-    let { weight, weight_unit } = req.body;
-    console.log("Weight:", weight);
-    console.log("Weight Unit:", weight_unit);
+  const { id } = req.params;
+  let { weight, weight_unit } = req.body;
 
-    try {
-        const patient = await prisma.patient.findUnique({
-            where: { id: id },
-        });
+  if (weight === undefined || isNaN(weight)) {
+      return res.status(400).json({ message: "Invalid weight value. Must be a number." });
+  }
 
-        if (!patient) {
-            return res.status(400).json({ message: "Patient not found." });
-        }
+  try {
+      const patient = await prisma.patient.findUnique({
+          where: { id: String(id) },
+      });
 
-        const now = new Date();
-        const isoTime = now.toISOString();
+      if (!patient) {
+          return res.status(400).json({ message: "Patient not found." });
+      }
 
-        const activity = await findOrCreateActivity(id);
+      const activity = await findOrCreateActivity(id);
 
-        const updatedActivity = await prisma.patientActivity.update({
-            where: { id: activity.id, }, // Corrected where clause
-            data: { weight, weight_unit },
-        });
+      const updatedActivity = await prisma.patientActivity.update({
+          where: { id: activity.id },
+          data: { weight, weight_unit },
+      });
 
-        res.status(200).json({
-            weight: updatedActivity.weight,
-            weight_unit: updatedActivity.weight_unit,
-            date: isoTime,
-        });
-    } catch (error) {
-        console.error("Error logging weight:", error);
-        res.status(500).json({ message: "Error logging weight", error: error.message });
-    }
+      res.status(200).json({
+          success: true,
+          weight: updatedActivity.weight,
+          weight_unit: updatedActivity.weight_unit,
+          date: updatedActivity.date.toISOString().split("T")[0],
+      });
+  } catch (error) {
+      console.error("Error logging weight:", error);
+      res.status(500).json({ message: "Error logging weight", error: error.message });
+  }
 };
+
 
 const getWeightStatus = async (req, res) => {
   const { id } = req.params; // Patient ID
 
   try {
-      // Get today's date in UTC and normalize to start of the day
+      // Get today's date in UTC
       const today = new Date();
       today.setUTCHours(0, 0, 0, 0);
 
-      // Calculate the start of the 7-day period
+      // Get date for 7 days ago
       const sevenDaysAgo = new Date(today);
       sevenDaysAgo.setDate(today.getDate() - 6);
 
-      // Fetch all weight logs for the last 7 days
+      // Fetch weight logs from the past 7 days
       const activities = await prisma.patientActivity.findMany({
           where: {
               patientId: String(id),
@@ -606,30 +613,28 @@ const getWeightStatus = async (req, res) => {
                   gte: sevenDaysAgo,
                   lte: today,
               },
-              weight: { not: null }, // Only include logs where weight was recorded
           },
           orderBy: { date: "asc" },
       });
 
-      // Helper function to format date as YYYY-MM-DD
+      // Helper function to format date
       const formatDateYYYYMMDD = (date) => date.toISOString().split("T")[0];
 
-      // Initialize variables for tracking weight
+      // Initialize last logged weight
       let lastLoggedWeight = null;
       let lastLoggedWeightUnit = "kg"; // Default unit
 
-      // ✅ Ensure each day in the range has a weight log
+      // ✅ Ensure each day has a weight log (fill missing days with last logged weight)
       const weightData = [];
       for (let i = 0; i < 7; i++) {
           const currentDate = new Date(sevenDaysAgo);
           currentDate.setDate(sevenDaysAgo.getDate() + i);
           const dateKey = formatDateYYYYMMDD(currentDate);
 
-          // Find an activity log for this specific date
+          // Find an activity for this specific date
           const activity = activities.find(act => formatDateYYYYMMDD(act.date) === dateKey);
 
-          if (activity) {
-              // ✅ Update last known weight only when there is a new entry
+          if (activity && activity.weight !== null) {
               lastLoggedWeight = activity.weight;
               lastLoggedWeightUnit = activity.weight_unit;
           }
@@ -665,6 +670,7 @@ const getWeightStatus = async (req, res) => {
       });
   }
 };
+
 
 
 
