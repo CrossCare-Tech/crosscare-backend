@@ -474,13 +474,9 @@ const logSteps = async (req, res) => {
 
       // Update only the `steps` field
       await prisma.patientActivity.update({
-          where: {
-              id: activity.id
-          },
-          data: {
-            stepsGoal: stepsGoal
-          }
-      });
+        where: { id: activity.id },
+        data: { stepsGoal: stepsGoal } // Ensure this matches your schema field name
+    });
 
       // Fetch updated activity to ensure correct `stepsGoal`
       const updatedActivity = await prisma.patientActivity.findUnique({
@@ -1127,8 +1123,6 @@ const getMedications = async (req, res) => {
         });
     }
 };
-
-
 
 const markMedicationCompleted = async (req, res) => {
   try {
