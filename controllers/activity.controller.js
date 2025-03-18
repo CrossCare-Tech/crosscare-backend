@@ -464,6 +464,7 @@ const logSteps = async (req, res) => {
       const patient = await prisma.patient.findUnique({
           where: { id: id },
       });
+      console.log("patient:", patient);
 
       if (!patient) {
           return res.status(400).json({ message: "Patient not found." });

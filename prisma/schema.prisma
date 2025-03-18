@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,70 +8,71 @@ datasource db {
 }
 
 model Patient {
-  id        String     @id @default(uuid()) // UUID for primary key
-  email     String     @unique
-  password  String
-  createdAt DateTime   @default(now()) @map("created_at")
-  updatedAt DateTime   @default(now()) @map("updated_at")
-  name      String
-  age       Int?
+  id         String            @id @default(uuid())
+  email      String            @unique
+  password   String
+  createdAt  DateTime          @default(now()) @map("created_at")
+  updatedAt  DateTime          @default(now()) @map("updated_at")
+  name       String
+  age        Int?
+  doctorId   String?
   activities PatientActivity[]
-  doctorId  String?    // Assuming this will be a UUID as well
 }
 
 model Doctor {
-  id        String     @id @default(uuid()) // UUID for primary key
+  id        String   @id @default(uuid())
   name      String
-  email     String     @unique
+  email     String   @unique
   password  String
-  createdAt DateTime   @default(now()) @map("created_at")
-  updatedAt DateTime   @default(now()) @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
 }
 
 model PatientActivity {
-  id             String   @id @default(uuid()) // UUID for primary key
-  patientId      String   @map("user_id") // UUID for foreign key
-  patient        Patient  @relation(fields: [patientId], references: [id])
-  date           DateTime
-  weight         Float?
-  weight_unit    String?
-  water          Int?
-  waterGoal      Int?
-  steps          Int?
-  stepsGoal      Int?
-  sleepStart     DateTime?
-  sleepEnd       DateTime?
-  meal           Meals[]
-  heart_rate     Float?
-  notetaking     String?
-  wombPicture    String?
-  medications    Medication[]
+  id          String       @id @default(uuid())
+  patientId   String       @map("user_id")
+  date        DateTime
+  weight      Float?
+  weight_unit String?
+  water       Int?
+  steps       Int?
+  sleepStart  DateTime?
+  sleepEnd    DateTime?
+  heart_rate  Float?
+  notetaking  String?
+  wombPicture String?
+  waterGoal   Int?
+  stepsGoal   Int?
+  meal        Meals[]
+  medications Medication[]
+  patient     Patient      @relation(fields: [patientId], references: [id])
 }
 
 model Meals {
-  mealId            String          @id @default(uuid()) // UUID for primary key
+  mealId            String          @id @default(uuid())
   name              String
-  patientActivityId String         @map("user_activity_id") // UUID for foreign key
+  patientActivityId String          @map("user_activity_id")
   patientActivity   PatientActivity @relation(fields: [patientActivityId], references: [id])
+
   @@unique([patientActivityId, mealId])
 }
 
 model MedicalDocs {
-  id         String   @id @default(uuid()) // UUID for primary key
-  files      String
+  id    String @id @default(uuid())
+  files String
 }
 
 model Medication {
-  id              String   @id @default(uuid())
+  id                String          @id @default(uuid())
   patientActivityId String
+  medicationName    String
+  startDate         DateTime
+  endDate           DateTime?
+  days              String[]
+  times             DateTime[]
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  completed         Boolean         @default(false)
+  completedDates    String[]        @default([])
   patientActivity   PatientActivity @relation(fields: [patientActivityId], references: [id])
-  medicationName   String
-  startDate        DateTime
-  endDate          DateTime?
-  completed       Boolean   @default(false)
-  completedDates  String[] @default([]) 
-  days             String[]  // This will store the days of the week (e.g., ["M", "T", "W"])
-  times            DateTime[] // This will store the times for medication
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
 }
