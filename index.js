@@ -7,11 +7,13 @@ import userRoutes from './routes/user.route.js'
 import doctorAuthRoutes from './routes/doctor/auth.route.js'
 import {GoogleGenerativeAI} from '@google/generative-ai';
 
+
 // Load environment variables
 config();
 
 const PORT = process.env.PORT || 5000;
 const app = express();
+
 
 const geminiAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 app.use(express.json());
