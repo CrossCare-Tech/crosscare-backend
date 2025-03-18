@@ -1029,7 +1029,7 @@ const createNote = async (req, res) => {
     }
   };
 
-const getMedications = async (req, res) => {
+  const getMedications = async (req, res) => {
     try {
         const { id } = req.params;
         const { startDate, endDate } = req.query;
@@ -1066,21 +1066,34 @@ const getMedications = async (req, res) => {
         // Fetch all medications for the patient
         const medications = await prisma.medication.findMany(query);
 
-        // ✅ Group medications by their date
-        const groupedMedications = medications.reduce((acc, med) => {
+        // Map day numbers to abbreviations
+        const dayAbbreviations = {
+            0: "SU", // Sunday
+            1: "M",  // Monday 
+            2: "T",  // Tuesday
+            3: "W",  // Wednesday
+            4: "TH", // Thursday
+            5: "F",  // Friday
+            6: "SA"  // Saturday
+        };
+
+        // Process each medication individually
+        const formattedMedications = medications.map(med => {
             const dateKey = med.startDate.toISOString().split('T')[0];
-
-            if (!acc[dateKey]) {
-                acc[dateKey] = { medications: [] };
-            }
-
-            acc[dateKey].medications.push(med);
-            return acc;
-        }, {});
-
-        // ✅ Process each medication entry, ensuring completion is date-specific
-        const formattedMedications = Object.entries(groupedMedications).flatMap(([date, data]) => {
-            return data.medications.map(med => ({
+            
+            // Convert completedDates array to an array of day abbreviations
+            const completedDaysOfWeek = (med.completedDates || []).map(dateStr => {
+                const date = new Date(dateStr);
+                const dayOfWeek = date.getDay(); // 0-6 where 0 is Sunday
+                return dayAbbreviations[dayOfWeek];
+            });
+            
+            // Check if the medication has been completed for all scheduled days
+            const isCompleteForAllScheduledDays = med.days.every(day => 
+                completedDaysOfWeek.includes(day)
+            );
+            
+            return {
                 id: med.id,
                 medicationName: med.medicationName,
                 patientActivityId: med.patientActivityId,
@@ -1091,11 +1104,13 @@ const getMedications = async (req, res) => {
                     time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
                 ),
                 activityDate: med.patientActivity.date.toISOString().split('T')[0],
-                completed: (med.completedDates ?? []).includes(date) // ✅ Check if this specific date was completed
-            }));
+                completed: isCompleteForAllScheduledDays,
+                completedDates: med.completedDates || [],
+                completedDaysOfWeek: completedDaysOfWeek
+            };
         });
 
-        // ✅ Group medications by active status (current vs. past)
+        // Group medications by active status (current vs. past)
         const today = new Date();
         today.setUTCHours(0, 0, 0, 0);
 
@@ -1127,12 +1142,8 @@ const getMedications = async (req, res) => {
 
 const markMedicationCompleted = async (req, res) => {
   try {
-      console.log("Request params:", req.params);
       const medicationId = req.params.medicationId || req.params.id;
-      console.log("Medication ID:", medicationId);
-
-      const { completed, date } = req.body;
-      console.log("Request body:", req.body);
+      const { completed, date, time } = req.body;
 
       if (completed === undefined) {
           return res.status(400).json({ 
@@ -1155,16 +1166,17 @@ const markMedicationCompleted = async (req, res) => {
           });
       }
 
-      // Convert input date to a JavaScript Date object
-      const formattedDate = new Date(date);
-      formattedDate.setUTCHours(0, 0, 0, 0);
-      
-      if (isNaN(formattedDate)) {
+      // Format the date string to YYYY-MM-DD format only
+      const dateObj = new Date(date);
+      if (isNaN(dateObj)) {
           return res.status(400).json({
               success: false,
               message: "Invalid date format. Use YYYY-MM-DD."
           });
       }
+
+      // Format as YYYY-MM-DD only, without time component
+      const formattedDateString = dateObj.toISOString().split('T')[0];
 
       // Fetch the specific medication
       const medication = await prisma.medication.findUnique({
@@ -1172,29 +1184,49 @@ const markMedicationCompleted = async (req, res) => {
       });
 
       if (!medication) {
-          console.error("Medication not found for ID:", medicationId);
           return res.status(404).json({
               success: false,
               message: "Medication not found."
           });
       }
 
-      console.log("Medication found:", medication);
+      // Get the day of the week for this date
+      const dayOfWeek = dateObj.getDay(); // 0-6 where 0 is Sunday
+
+      // Map day number to abbreviation
+      const dayAbbreviations = {
+          0: "SU", // Sunday
+          1: "M",  // Monday 
+          2: "T",  // Tuesday
+          3: "W",  // Wednesday
+          4: "TH", // Thursday
+          5: "F",  // Friday
+          6: "SA"  // Saturday
+      };
+      const dayAbbreviation = dayAbbreviations[dayOfWeek];
+
+      // Check if this day is in the medication's scheduled days
+      if (!medication.days.includes(dayAbbreviation)) {
+          return res.status(400).json({
+              success: false,
+              message: `This medication is not scheduled for ${dayAbbreviation} (${formattedDateString}).`
+          });
+      }
 
       // Retrieve existing completed dates, or initialize an empty array
       let completedDates = medication.completedDates || [];
 
+      // If marking as completed, add the date
       if (completed) {
-          // ✅ Add the specific date if marking as completed
-          if (!completedDates.includes(formattedDate.toISOString().split('T')[0])) {
-              completedDates.push(formattedDate.toISOString().split('T')[0]);
+          if (!completedDates.includes(formattedDateString)) {
+              completedDates.push(formattedDateString);
           }
       } else {
-          // ❌ Remove the date if marking as incomplete
-          completedDates = completedDates.filter(d => d !== formattedDate.toISOString().split('T')[0]);
+          // If marking as incomplete, remove the date
+          completedDates = completedDates.filter(d => d !== formattedDateString);
       }
 
-      // ✅ Update medication with completedDates array
+      // Update medication with completedDates array
       const updatedMedication = await prisma.medication.update({
           where: { id: medicationId },
           data: { completedDates }
@@ -1202,7 +1234,7 @@ const markMedicationCompleted = async (req, res) => {
 
       return res.status(200).json({
           success: true,
-          message: `Medication ${completed ? 'marked as completed' : 'marked as incomplete'} on ${date}.`,
+          message: `Medication ${completed ? 'marked as completed' : 'marked as incomplete'} for ${dayAbbreviation} on ${formattedDateString}.`,
           data: updatedMedication
       });
   } catch (error) {
@@ -1214,6 +1246,8 @@ const markMedicationCompleted = async (req, res) => {
       });
   }
 };
+
+
 
 
 export default {
