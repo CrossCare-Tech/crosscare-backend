@@ -97,7 +97,6 @@ const logWaterIntake = async (req, res) => {
   const { id } = req.params;
   console.log("req.params:", req.params);
   console.log("logWaterIntake id:", id);
-
   const { water } = req.body;
 
   console.log("logWaterIntake id:", id);
@@ -115,32 +114,16 @@ const logWaterIntake = async (req, res) => {
           return res.status(400).json({ message: "Patient not found." });
       }
 
-      // Find or create a new patient activity if not exists
       const activity = await findOrCreateActivity(id);
 
-      // Get the previous water intake (if it exists)
-      const previousWater = activity.water || 0;
-
-      // Get the water goal from the activity (if set)
-      const waterGoal = activity.waterGoal || 0;
-
-      // Calculate the new total water intake
-      const totalWaterIntake = previousWater + water;
-
-      // Check if the new total water intake exceeds the water goal
-      if (totalWaterIntake > waterGoal) {
-          return res.status(400).json({
-              message: `Total water intake exceeds the water goal. Your goal is ${waterGoal} liters, and you are trying to log ${water} liters.`,
-          });
-      }
-
-      // Update the patient's activity with the new total water intake
       const updatedActivity = await prisma.patientActivity.update({
           where: {
               id: activity.id, // Include the id from the activity object
           },
-          data: { water: totalWaterIntake },
+          data: { water: water },
       });
+
+      
 
       res.status(200).json(updatedActivity);
   } catch (error) {
@@ -148,8 +131,6 @@ const logWaterIntake = async (req, res) => {
       res.status(500).json({ message: "Error logging water intake", error: error.message });
   }
 };
-
-
 
 const WaterGoal = async (req, res) => {
   console.log("🔵 Received request to update water goal");
