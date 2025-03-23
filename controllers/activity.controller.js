@@ -94,42 +94,46 @@ const findOrCreateActivity = async (patientId) => {
 
 // Log Water Intake
 const logWaterIntake = async (req, res) => {
-    const { id } = req.params;
-    console.log("req.params:", req.params);
-    console.log("logWaterIntake id:", id);
-    const { water } = req.body;
+  const { id } = req.params;
+  console.log("req.params:", req.params);
+  console.log("logWaterIntake id:", id);
+  const { water, isIncrement = false } = req.body;
 
-    console.log("logWaterIntake id:", id);
+  console.log("logWaterIntake id:", id, "water:", water, "isIncrement:", isIncrement);
 
-    if (water === undefined || water === null || isNaN(water)) {
-        return res.status(400).json({ message: "Invalid water value. Must be a number." });
-    }
+  if (water === undefined || water === null || isNaN(water)) {
+      return res.status(400).json({ message: "Invalid water value. Must be a number." });
+  }
 
-    try {
-        const patientExists = await prisma.patient.findUnique({
-            where: { id: id },
-        });
+  try {
+      const patientExists = await prisma.patient.findUnique({
+          where: { id: id },
+      });
 
-        if (!patientExists) {
-            return res.status(400).json({ message: "Patient not found." });
-        }
+      if (!patientExists) {
+          return res.status(400).json({ message: "Patient not found." });
+      }
 
-        const activity = await findOrCreateActivity(id);
+      const activity = await findOrCreateActivity(id);
 
-        const updatedActivity = await prisma.patientActivity.update({
-            where: {
-                id: activity.id, // Include the id from the activity object
-            },
-            data: { water: water },
-        });
+      // If isIncrement is true, add to the existing value
+      // Otherwise, replace the value (maintaining backwards compatibility)
+      const updatedActivity = await prisma.patientActivity.update({
+          where: {
+              id: activity.id,
+          },
+          data: { 
+              water: isIncrement ? {
+                  increment: water
+              } : water 
+          },
+      });
 
-        
-
-        res.status(200).json(updatedActivity);
-    } catch (error) {
-        console.error("Error logging water intake:", error);
-        res.status(500).json({ message: "Error logging water intake", error: error.message });
-    }
+      res.status(200).json(updatedActivity);
+  } catch (error) {
+      console.error("Error logging water intake:", error);
+      res.status(500).json({ message: "Error logging water intake", error: error.message });
+  }
 };
 
 const WaterGoal = async (req, res) => {
