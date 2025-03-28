@@ -97,9 +97,9 @@ const logWaterIntake = async (req, res) => {
   const { id } = req.params;
   console.log("req.params:", req.params);
   console.log("logWaterIntake id:", id);
-  const { water } = req.body;
+  const { water, isIncrement = false } = req.body;
 
-  console.log("logWaterIntake id:", id);
+  console.log("logWaterIntake id:", id, "water:", water, "isIncrement:", isIncrement);
 
   if (water === undefined || water === null || isNaN(water)) {
       return res.status(400).json({ message: "Invalid water value. Must be a number." });
@@ -116,11 +116,17 @@ const logWaterIntake = async (req, res) => {
 
       const activity = await findOrCreateActivity(id);
 
+      // If isIncrement is true, add to the existing value
+      // Otherwise, replace the value (maintaining backwards compatibility)
       const updatedActivity = await prisma.patientActivity.update({
           where: {
-              id: activity.id, // Include the id from the activity object
+              id: activity.id,
           },
-          data: { water: water },
+          data: { 
+              water: isIncrement ? {
+                  increment: water
+              } : water 
+          },
       });
 
       res.status(200).json(updatedActivity);
