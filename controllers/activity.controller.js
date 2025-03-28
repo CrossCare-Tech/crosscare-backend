@@ -458,6 +458,56 @@ const logHeartRate = async (req, res) => {
 // Log Steps
 const logSteps = async (req, res) => {
   const { id } = req.params; // Patient ID
+  const { steps } = req.body;
+
+  console.log("req.params:", req.params);
+  console.log("logSteps id:", id);
+  console.log("Steps:", steps);
+
+  try {
+      const patient = await prisma.patient.findUnique({
+          where: { id: id },
+      });
+      console.log("patient:", patient);
+
+      if (!patient) {
+          return res.status(400).json({ message: "Patient not found." });
+      }
+
+      // Find or create an activity for the patient
+      const activity = await findOrCreateActivity(id); 
+
+      // Update only the `steps` field
+      await prisma.patientActivity.update({
+        where: { id: activity.id },
+        data: { steps: steps } // Ensure this matches your schema field name
+    });
+
+      // Fetch updated activity to ensure correct `stepsGoal`
+      const updatedActivity = await prisma.patientActivity.findUnique({
+          where: { id: activity.id },
+          select: {
+              id: true,
+              date: true,
+              steps: true,
+              stepsGoal: true // Ensure this field is included
+          }
+      });
+
+      res.status(200).json({
+          id: updatedActivity.id,
+          date: updatedActivity.date.toISOString().split("T")[0], // Format as YYYY-MM-DD
+          day: updatedActivity.date.toLocaleDateString("en-US", { weekday: "short" }), // Short weekday name
+          steps: updatedActivity.steps,
+          stepGoal: updatedActivity.stepsGoal ||0 , // Default to 5000 if undefined
+      });
+  } catch (error) {
+      console.error("Error logging steps:", error);
+      res.status(500).json({ message: "Error logging steps", error: error.message || error });
+  }
+};
+const StepsGoal = async (req, res) => {
+  const { id } = req.params; // Patient ID
   const { stepsGoal } = req.body;
 
   console.log("req.params:", req.params);
@@ -716,7 +766,7 @@ const createNote = async (req, res) => {
           patientId: id,
           date: {
             gte: today,
-            lt: new Date(today.getTime() + 24 * 60 * 60 * 1000),
+            lt: new Date(today.getTime()),
           },
         },
       });
@@ -764,6 +814,106 @@ const createNote = async (req, res) => {
       return res.status(500).json({
         success: false,
         message: "Failed to create note",
+        error: error.message
+      });
+    }
+  };
+
+  const editNote = async (req, res) => {
+    try {
+      const { id, noteId } = req.params; // Patient ID and Note ID
+      const { title, description } = req.body;
+  
+      // Check if patient exists
+      const patient = await prisma.patient.findUnique({
+        where: { id }
+      });
+  
+      if (!patient) {
+        return res.status(404).json({
+          success: false,
+          message: "Patient not found"
+        });
+      }
+  
+      // Find the activity with the specific note ID
+      const activity = await prisma.patientActivity.findUnique({
+        where: { id: noteId }
+      });
+  
+      if (!activity) {
+        return res.status(404).json({
+          success: false,
+          message: "Note not found"
+        });
+      }
+  
+      // Check if this activity belongs to the patient
+      if (activity.patientId !== id) {
+        return res.status(403).json({
+          success: false,
+          message: "You do not have permission to edit this note"
+        });
+      }
+  
+      // Parse the existing note data
+      let noteData;
+      try {
+        noteData = JSON.parse(activity.notetaking || "{}");
+      } catch (e) {
+        noteData = { title: "Untitled", description: "" };
+      }
+  
+      // Get current time for the update timestamp
+      const now = new Date();
+      const timeZoneOffset = now.getTimezoneOffset() * 60000;
+      const localTime = new Date(now.getTime() - timeZoneOffset);
+      const isoTime = localTime.toISOString();
+  
+      // Update the note data
+      const updatedNoteData = {
+        ...noteData,
+        title,
+        description,
+        updatedAt: isoTime, // Add a timestamp for the update
+      };
+  
+      // Update the activity record
+      const updatedActivity = await prisma.patientActivity.update({
+        where: { id: noteId },
+        data: {
+          notetaking: JSON.stringify(updatedNoteData)
+        }
+      });
+  
+      // Format the date for display in local time
+      const formattedDate = localTime.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: true
+      });
+  
+      return res.status(200).json({
+        success: true,
+        message: "Note updated successfully",
+        data: {
+          id: updatedActivity.id,
+          patientId: updatedActivity.patientId,
+          date: isoTime,
+          title: updatedNoteData.title,
+          description: updatedNoteData.description,
+          createdAt: noteData.createdAt || isoTime,
+          updatedAt: updatedNoteData.updatedAt
+        }
+      });
+    } catch (error) {
+      console.error("Error updating note:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to update note",
         error: error.message
       });
     }
@@ -1264,7 +1414,9 @@ export default {
     logHeartRate,
     logSteps,
     logWeight,
+    StepsGoal,
     createNote,
+    editNote,
     getWeightStatus,
     deleteSleepStatus,
     getUserNotes,
