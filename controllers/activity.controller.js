@@ -1,6 +1,9 @@
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
+// import AWS from "aws-sdk";
+// import multer from "multer";
+// import { v4 as uuidv4 } from "uuid";
 // Fetch user activities
 const getUserActivities = async (req, res) => {
   const { id } = req.params;
@@ -438,21 +441,71 @@ const deleteSleepStatus = async (req, res) => {
 
 // Log Heart Rate
 const logHeartRate = async (req, res) => {
-    const { patientId } = req.params;
-    const { heartRate } = req.body;
+  const { id } = req.params;
+  const { heartRate } = req.body;
 
-    try {
-        const activity = await findOrCreateActivity(patientId);
+  try {
+      if (!id) {
+          return res.status(400).json({ message: "Patient ID is required" });
+      }
+      
+      if (heartRate === undefined || heartRate === null) {
+          return res.status(400).json({ message: "Heart rate is required" });
+      }
 
-        const updatedActivity = await prisma.patientActivity.update({
-            where: { patientId_date: { patientId: String(patientId), date: activity.date } },
-            data: { heart_rate: heartRate }
-        });
+      const activity = await findOrCreateActivity(id);
 
-        res.status(200).json(updatedActivity);
-    } catch (error) {
-        res.status(500).json({ message: "Error logging heart rate", error });
-    }
+      // Using the correct primary key 'id' from your schema
+      const updatedActivity = await prisma.patientActivity.update({
+        where: { 
+            id: activity.id
+        },
+        data: { heart_rate: Number(heartRate) }
+    });
+    
+    res.status(200).json({
+        success: true,
+        message: "Heart rate logged successfully",
+        heartRate: Number(heartRate),
+        activityId: updatedActivity.id,
+        date: updatedActivity.date
+    });
+  } catch (error) {
+      console.error("Error details:", error);
+      res.status(500).json({ 
+          message: "Error logging heart rate", 
+          error: error.message || "Unknown error" 
+      });
+  }
+};
+
+const getHeartRate = async (req, res) => {
+  const { id } = req.params; // Assuming 'id' is the patientId from the route
+  
+  try {
+      // Find the most recent activity for this patient
+      const activity = await prisma.patientActivity.findFirst({
+          where: { patientId: String(id) },
+          orderBy: { date: 'desc' }
+      });
+      
+      if (!activity) {
+          return res.status(404).json({ message: "Activity not found" });
+      }
+      
+      // Format the response data
+      const formattedData = {
+          id: activity.id || id, // Use activity.id if available, otherwise fallback to the patient id
+          date: activity.date.toISOString().split('T')[0],
+          day: new Date(activity.date).toLocaleString('en-US', { weekday: 'short' }),
+          heartRate: activity.heart_rate
+      };
+      
+      res.status(200).json(formattedData);
+  } catch (error) {
+      console.error("Error details:", error);
+      res.status(500).json({ message: "Error retrieving heart rate", error: error.message });
+  }
 };
 
 // Log Steps
@@ -1402,6 +1455,262 @@ const markMedicationCompleted = async (req, res) => {
 };
 
 
+// AWS.config.update({
+//   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+//   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+//   region: process.env.AWS_REGION || 'us-east-1'
+// });
+
+// const s3 = new AWS.S3();
+
+// // Configure multer for memory storage
+// const storage = multer.memoryStorage();
+// export const upload = multer({
+//   storage,
+//   limits: {
+//     fileSize: 5 * 1024 * 1024, // 5MB limit
+//   }
+// });
+
+// Add a journal entry with optional image
+// const addJournalEntry = async (req, res) => {
+//   try {
+//     const { id } = req.params; // Patient ID
+//     const { title } = req.body;
+//     let imageUrl = null;
+
+//     // Validate input
+//     if (!title || !content) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Title and content are required"
+//       });
+//     }
+
+//     // Check if patient exists
+//     const patient = await prisma.patient.findUnique({
+//       where: { id }
+//     });
+
+//     if (!patient) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Patient not found"
+//       });
+//     }
+
+//     // Handle image upload if present
+//     if (req.file) {
+//       const fileExtension = req.file.originalname.split('.').pop();
+//       const fileName = `journal/${id}/${uuidv4()}.${fileExtension}`;
+
+//       // Set up S3 upload parameters
+//       const params = {
+//         Bucket: process.env.AWS_S3_BUCKET_NAME,
+//         Key: fileName,
+//         Body: req.file.buffer,
+//         ContentType: req.file.mimetype,
+//         ACL: 'public-read' // Make the file publicly accessible
+//       };
+
+//       // Upload image to S3
+//       const uploadResult = await s3.upload(params).promise();
+//       imageUrl = uploadResult.Location; // Store the HTTPS URL
+//     }
+
+//     // Get current date and time
+//     const now = new Date();
+
+//     // Find or create an activity entry for today
+//     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+//     let activity = await prisma.patientActivity.findFirst({
+//       where: {
+//         patientId: id,
+//         date: {
+//           gte: today,
+//           lt: new Date(today.getTime() + 24 * 60 * 60 * 1000), // Next day
+//         },
+//       },
+//     });
+
+//     // If no activity for today, create one
+//     if (!activity) {
+//       activity = await prisma.patientActivity.create({
+//         data: {
+//           patientId: id,
+//           date: now,
+//         },
+//       });
+//     }
+
+//     // Create the journal entry
+//     const journalData = {
+//       title,
+//       imageUrl,
+//       createdAt: now.toISOString(),
+//     };
+
+//     // Update the wombPicture field with the journal data
+//     const updatedActivity = await prisma.patientActivity.update({
+//       where: { id: activity.id },
+//       data: {
+//         wombPicture: JSON.stringify(journalData),
+//       },
+//     });
+
+//     return res.status(201).json({
+//       success: true,
+//       message: "Journal entry created successfully",
+//       data: {
+//         id: updatedActivity.id,
+//         patientId: updatedActivity.patientId,
+//         date: updatedActivity.date,
+//         journal: journalData,
+//       }
+//     });
+//   } catch (error) {
+//     console.error("Error creating journal entry:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to create journal entry",
+//       error: error.message
+//     });
+//   }
+// };
+
+// // Get all journal entries for a patient
+// const getJournalEntries = async (req, res) => {
+//   try {
+//     const { id } = req.params; // Patient ID
+
+//     // Check if patient exists
+//     const patient = await prisma.patient.findUnique({
+//       where: { id }
+//     });
+
+//     if (!patient) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Patient not found"
+//       });
+//     }
+
+//     // Get all activities with journal entries
+//     const activities = await prisma.patientActivity.findMany({
+//       where: {
+//         patientId: id,
+//         wombPicture: { not: null, not: "" }
+//       },
+//       orderBy: {
+//         date: 'desc'
+//       }
+//     });
+
+//     // Parse journal entries from activities
+//     const journalEntries = activities.map(activity => {
+//       try {
+//         const journalData = JSON.parse(activity.wombPicture);
+//         const createdAt = new Date(journalData.createdAt || activity.date);
+        
+//         // Format date for display
+//         const formattedDate = createdAt.toLocaleString('en-US', {
+//           year: 'numeric',
+//           month: 'long',
+//           day: 'numeric',
+//           hour: 'numeric',
+//           minute: 'numeric',
+//           hour12: true
+//         });
+
+//         return {
+//           id: activity.id,
+//           patientId: activity.patientId,
+//           date: activity.date,
+//           title: journalData.title || "Untitled",
+//           imageUrl: journalData.imageUrl || null,
+//           createdAt: createdAt,
+//           formattedDate: formattedDate
+//         };
+//       } catch (e) {
+//         // Handle case where wombPicture isn't valid JSON
+//         return null;
+//       }
+//     }).filter(entry => entry !== null);
+
+//     return res.status(200).json({
+//       success: true,
+//       data: journalEntries
+//     });
+//   } catch (error) {
+//     console.error("Error fetching journal entries:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch journal entries",
+//       error: error.message
+//     });
+//   }
+// };
+
+// // Get a single journal entry
+// const getJournalEntry = async (req, res) => {
+//   try {
+//     const { id, entryId } = req.params;
+
+//     const activity = await prisma.patientActivity.findUnique({
+//       where: { id: entryId }
+//     });
+
+//     if (!activity || activity.patientId !== id || !activity.wombPicture) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Journal entry not found"
+//       });
+//     }
+
+//     try {
+//       const journalData = JSON.parse(activity.wombPicture);
+//       const createdAt = new Date(journalData.createdAt || activity.date);
+      
+//       // Format date for display
+//       const formattedDate = createdAt.toLocaleString('en-US', {
+//         year: 'numeric',
+//         month: 'long',
+//         day: 'numeric',
+//         hour: 'numeric',
+//         minute: 'numeric',
+//         hour12: true
+//       });
+
+//       return res.status(200).json({
+//         success: true,
+//         data: {
+//           id: activity.id,
+//           patientId: activity.patientId,
+//           date: activity.date,
+//           title: journalData.title || "Untitled",
+//           content: journalData.content || "",
+//           imageUrl: journalData.imageUrl || null,
+//           createdAt: createdAt,
+//           formattedDate: formattedDate
+//         }
+//       });
+//     } catch (e) {
+//       return res.status(500).json({
+//         success: false,
+//         message: "Invalid journal data format"
+//       });
+//     }
+//   } catch (error) {
+//     console.error("Error fetching journal entry:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch journal entry",
+//       error: error.message
+//     });
+//   }
+// };
+
+
 
 
 export default {
@@ -1417,11 +1726,16 @@ export default {
     StepsGoal,
     createNote,
     editNote,
+    getHeartRate,
     getWeightStatus,
     deleteSleepStatus,
     getUserNotes,
     addMedication,
     getMedications,
     getStepsStatus,
-    markMedicationCompleted
+    markMedicationCompleted,
+    // addJournalEntry,
+    // getJournalEntries,
+    // getJournalEntry,
+    // upload,
 };
