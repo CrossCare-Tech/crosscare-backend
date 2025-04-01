@@ -76,3 +76,77 @@ model Medication {
   completedDates    String[]        @default([])
   patientActivity   PatientActivity @relation(fields: [patientActivityId], references: [id])
 }
+
+
+enum ContentType {
+  EXERCISES
+  AUDIOS
+  STORIES
+}
+
+enum IconType {
+  heart
+  landscape
+  none
+  moon
+  cloud
+  sun
+  feather
+}
+
+model SelfCareCategory {
+  id             String      @id @default(uuid())
+  title          String
+  iconType       IconType
+  count          Int
+  contentType    ContentType
+  gradientStart  String
+  gradientMiddle String?
+  gradientEnd    String
+  exercises      Exercise[]
+  audioTracks    Audio[]
+  stories        Story[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+}
+
+model Exercise {
+  id                String           @id @default(uuid())
+  type              String
+  title             String
+  duration          String
+  image             String
+  isLocked          Boolean          @default(false)
+  categoryId        String
+  isFavorite        Boolean          @default(false)
+  content           String?          @db.Text
+  category          SelfCareCategory @relation(fields: [categoryId], references: [id])
+  // favoriteOfUsers   Patient[]        @relation("PatientFavorites")
+  // recentlyUsedByUsers Patient[]      @relation("PatientRecentlyUsed")
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+}
+
+model Audio {
+  id         String           @id @default(uuid())
+  title      String
+  url        String
+  duration   String?
+  image      String?
+  categoryId String
+  category   SelfCareCategory @relation(fields: [categoryId], references: [id])
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+}
+
+model Story {
+  id         String           @id @default(uuid())
+  title      String
+  content    String           @db.Text
+  image      String?
+  duration   String?
+  categoryId String
+  category   SelfCareCategory @relation(fields: [categoryId], references: [id])
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+}

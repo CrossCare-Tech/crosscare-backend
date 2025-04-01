@@ -4,6 +4,7 @@ import { config } from 'dotenv';
 import authRoutes from './routes/auth.route.js'
 import activityRoutes from './routes/activity.route.js'
 import userRoutes from './routes/user.route.js'
+import selfcareRoutes from './routes/selfcare.route.js'
 import doctorAuthRoutes from './routes/doctor/auth.route.js'
 import {GoogleGenerativeAI} from '@google/generative-ai';
 
@@ -46,6 +47,7 @@ app.get('/', (req, res) => {
 app.use('/api', authRoutes);
 app.use('/api', activityRoutes);
 app.use('/api', userRoutes);
+app.use('/api', selfcareRoutes);
 
 // Doctor Routes
 // app.use('/api', doctorAuthRoutes);
