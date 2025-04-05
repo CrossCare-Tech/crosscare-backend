@@ -1,6 +1,207 @@
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
+const QUESTIONNAIRE_DOMAINS = [
+  {
+    id: "domain-1",
+    name: "domain-1",
+    title: "DOMAIN I",
+    description: "Housing & Environment",
+    order: 1,
+    questions: [
+      {
+        questionId: "q1-1",
+        text: "What is your current housing situation?",
+        possibleFlag: "Housing instability / temporary housing",
+        order: 1,
+      },
+      {
+        questionId: "q1-2",
+        text: "Are you worried about losing your housing in the near future?",
+        possibleFlag: "Housing insecurity",
+        order: 2,
+      },
+      {
+        questionId: "q1-3",
+        text: "Have any utility companies threatened to shut off your services?",
+        possibleFlag: "Utilities support needed",
+        order: 3,
+      },
+      {
+        questionId: "q1-4",
+        text: "Any trouble getting to medical appointments or work due to transportation?",
+        possibleFlag: "Transportation barrier",
+        order: 4,
+      },
+      {
+        questionId: "q1-5",
+        text: "Do you feel safe where you live?",
+        possibleFlag: "Home safety concern",
+        order: 5,
+      },
+      {
+        questionId: "q1-6",
+        text: "Any concerns about your neighborhood, or safety?",
+        possibleFlag: "Neighborhood safety concern",
+        order: 6,
+      },
+    ],
+  },
+  {
+    id: "domain-2",
+    name: "domain-2",
+    title: "DOMAIN II",
+    description: "Safety & Demographics",
+    order: 2,
+    questions: [
+      {
+        questionId: "q2-1",
+        text: "What race or ethnicity do you identify with?",
+        possibleFlag: null,
+        order: 1,
+      },
+      {
+        questionId: "q2-2",
+        text: "Are you Hispanic or Latino?",
+        possibleFlag: null,
+        order: 2,
+      },
+      {
+        questionId: "q2-3",
+        text: "Have you been hurt or threatened by someone in the past year?",
+        possibleFlag: "Interpersonal violence",
+        order: 3,
+      },
+      {
+        questionId: "q2-4",
+        text: "Have you felt afraid of your current or past partner?",
+        possibleFlag: "Urgent safety referral",
+        order: 4,
+      },
+      {
+        questionId: "q2-5",
+        text: "Has anyone taken money from you or withheld it unfairly?",
+        possibleFlag: "Financial abuse",
+        order: 5,
+      },
+    ],
+  },
+  {
+    id: "domain-3",
+    name: "domain-3",
+    title: "DOMAIN III",
+    description: "Education & Employment",
+    order: 3,
+    questions: [
+      {
+        questionId: "q3-1",
+        text: "What is the highest level of education you've completed?",
+        possibleFlag: null,
+        order: 1,
+      },
+      {
+        questionId: "q3-2",
+        text: "What is your current work status?",
+        possibleFlag: "Employment support needed",
+        order: 2,
+      },
+      {
+        questionId: "q3-3",
+        text: "Is it hard to afford basic needs?",
+        possibleFlag: "Financial strain",
+        order: 3,
+      },
+      {
+        questionId: "q3-4",
+        text: "Would you like help finding a job?",
+        possibleFlag: "Referral to workforce navigator",
+        order: 4,
+      },
+      {
+        questionId: "q3-5",
+        text: "Interested in help with school or job training?",
+        possibleFlag: "Education support",
+        order: 5,
+      },
+      {
+        questionId: "q3-6",
+        text: "Do you need better daycare?",
+        possibleFlag: "Childcare need",
+        order: 6,
+      },
+    ],
+  },
+  {
+    id: "domain-4",
+    name: "domain-4",
+    title: "DOMAIN IV",
+    description: "Food & Physical Activity",
+    order: 4,
+    questions: [
+      {
+        questionId: "q4-1",
+        text: "Have you worried about running out of food?",
+        possibleFlag: "Food insecurity",
+        order: 1,
+      },
+      {
+        questionId: "q4-2",
+        text: "Did the food you bought ever not last?",
+        possibleFlag: "Food insecurity",
+        order: 2,
+      },
+      {
+        questionId: "q4-3",
+        text: "Can you get enough healthy food?",
+        possibleFlag: "Healthy food access",
+        order: 3,
+      },
+      {
+        questionId: "q4-4",
+        text: "How often do you exercise per week?",
+        possibleFlag: "Physical activity support",
+        order: 4,
+      },
+    ],
+  },
+  {
+    id: "domain-5",
+    name: "domain-5",
+    title: "DOMAIN V",
+    description: "Home Environment",
+    order: 5,
+    questions: [
+      {
+        questionId: "q5-1",
+        text: "Do you have any issues in your home, like mold, pests, or no heat?",
+        possibleFlag: "Environmental hazard, refer to housing services",
+        order: 1,
+      },
+    ],
+  },
+  {
+    id: "domain-6",
+    name: "domain-6",
+    title: "DOMAIN VI",
+    description: "Language & Communication",
+    order: 6,
+    questions: [
+      {
+        questionId: "q6-1",
+        text: "What language are you most comfortable speaking?",
+        possibleFlag: null,
+        order: 1,
+      },
+      {
+        questionId: "q6-2",
+        text: "Do you often need help reading medical materials?",
+        possibleFlag: "Health literacy / translation support",
+        order: 2,
+      },
+    ],
+  },
+];
+
 async function main() {
   console.log('Seeding database...');
 
@@ -248,7 +449,82 @@ async function main() {
   }
 
   console.log('Seeding completed successfully!');
+
+
+
+  for (const domain of QUESTIONNAIRE_DOMAINS) {
+    const { questions, ...domainData } = domain;
+    
+    try {
+      // Find existing domain
+      const existingDomain = await prisma.questionnaireDomain.findUnique({
+        where: { id: domainData.id },
+      });
+      
+      if (existingDomain) {
+        console.log(`Domain ${domainData.title} already exists, skipping creation`);
+      } else {
+        // Create domain if it doesn't exist
+        // Find the questionnaire we just created to link the domain to it
+        const questionnaire = await prisma.questionnaire.findFirst({
+          where: { patientId: patient.id },
+          orderBy: { createdAt: 'desc' }
+        });
+        
+        if (!questionnaire) {
+          console.log(`Cannot find questionnaire for patient, skipping domain creation`);
+          continue;
+        }
+        
+        // Try to create the domain with questionnaire link
+        try {
+          const createdDomain = await prisma.questionnaireDomain.create({
+            data: {
+              ...domainData,
+              questionnaireId: questionnaire.id
+            },
+          });
+          console.log(`Created domain: ${createdDomain.title}`);
+        } catch (error) {
+          // If the error is about unknown field, try without questionnaireId
+          if (error.message.includes('Unknown arg `questionnaireId`')) {
+            const createdDomain = await prisma.questionnaireDomain.create({
+              data: domainData,
+            });
+            console.log(`Created domain: ${createdDomain.title}`);
+          } else {
+            throw error;
+          }
+        }
+        console.log(`Created domain: ${createdDomain.title}`);
+        
+        // Create questions for this domain
+        for (const question of questions) {
+          try {
+            const createdQuestion = await prisma.question.create({
+              data: {
+                ...question,
+                domainId: createdDomain.id,
+              },
+            });
+            console.log(`Created question: ${createdQuestion.text}`);
+          } catch (error) {
+            console.log(`Skipping question ${question.questionId}: ${error.message}`);
+          }
+        }
+      }
+    } catch (error) {
+      console.log(`Error processing domain ${domainData.title}: ${error.message}`);
+    }
+  }
+
+  console.log(`\nSeeding completed successfully!`);
 }
+
+
+
+  // Create domains and their questions
+  
 
 main()
   .catch((e) => {

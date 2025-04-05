@@ -17,6 +17,8 @@ model Patient {
   age        Int?
   doctorId   String?
   activities PatientActivity[]
+  questionResponses  QuestionResponse[]
+  questionnaires     Questionnaire[]
 }
 
 model Doctor {
@@ -149,4 +151,52 @@ model Story {
   category   SelfCareCategory @relation(fields: [categoryId], references: [id])
   createdAt  DateTime         @default(now())
   updatedAt  DateTime         @updatedAt
+}
+
+// Questionnaire Models
+
+model QuestionnaireDomain {
+  id           String      @id @default(uuid())
+  name         String      // e.g., "domain-1", "domain-2" - external identifier
+  title        String      // e.g., "DOMAIN I", "DOMAIN II"
+  description  String      // e.g., "Housing & Environment"
+  order        Int         // To maintain the correct ordering of domains
+  questions    Question[]
+}
+
+model Question {
+  id               String              @id @default(uuid())
+  questionId       String              // e.g., "q1-1", "q2-3" - external identifier
+  text             String              // The actual question text
+  possibleFlag     String?             // e.g., "Housing instability / temporary housing"
+  domainId         String              // Foreign key to domain
+  domain           QuestionnaireDomain @relation(fields: [domainId], references: [id])
+  order            Int                 // To maintain the correct order of questions
+  responses        QuestionResponse[]
+}
+
+model QuestionResponse {
+  id              String         @id @default(uuid())
+  patientId       String
+  patient         Patient        @relation(fields: [patientId], references: [id])
+  questionId      String
+  question        Question       @relation(fields: [questionId], references: [id])
+  domainId        String         // Stored for easier querying
+  response        String         // Patient's answer text
+  flag            String?        // The flag that was raised, if any
+  timestamp       DateTime       @default(now())
+  questionnaireId String?
+  questionnaire   Questionnaire? @relation(fields: [questionnaireId], references: [id])
+}
+
+model Questionnaire {
+  id             String             @id @default(uuid())
+  patientId      String
+  patient        Patient            @relation(fields: [patientId], references: [id])
+  startedAt      DateTime           @default(now())
+  completedAt    DateTime?
+  isActive       Boolean            @default(true)
+  isPaused       Boolean            @default(false)
+  isCompleted    Boolean            @default(false)
+  responses      QuestionResponse[]
 }
