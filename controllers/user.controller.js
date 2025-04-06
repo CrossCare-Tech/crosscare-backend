@@ -26,6 +26,11 @@ const getProfileDetails = async (req, res) => {
             where: {
                 id: userId,  // Use the userId from the decoded token
             },
+            include:{
+                activities: true,  // Include activities related to the user
+                questionnaires: true,  // Include questionnaires related to the user
+                questionResponses: true,  // Include question responses related to the user
+            }
         });
 
         if (!user) {
