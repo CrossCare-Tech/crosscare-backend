@@ -1,9 +1,9 @@
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
-
+import { createClient } from '@supabase/supabase-js';
 // import AWS from "aws-sdk";
-// import multer from "multer";
-// import { v4 as uuidv4 } from "uuid";
+import multer from "multer";
+import { v4 as uuidv4 } from "uuid";
 // Fetch user activities
 const getUserActivities = async (req, res) => {
   const { id } = req.params;
@@ -1455,130 +1455,227 @@ const markMedicationCompleted = async (req, res) => {
 };
 
 
-// AWS.config.update({
-//   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-//   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-//   region: process.env.AWS_REGION || 'us-east-1'
-// });
+const supabaseUrl = 'https://tskzddfyjazcirdvloch.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRza3pkZGZ5amF6Y2lyZHZsb2NoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA1MDc0NDYsImV4cCI6MjA1NjA4MzQ0Nn0.g4zXLk_GWg0VgvYEpye_bLshsMTpvaZHXXe3xP1cLCg';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-// const s3 = new AWS.S3();
-
-// // Configure multer for memory storage
-// const storage = multer.memoryStorage();
-// export const upload = multer({
-//   storage,
-//   limits: {
-//     fileSize: 5 * 1024 * 1024, // 5MB limit
-//   }
-// });
+// Configure multer for memory storage
+const storage = multer.memoryStorage();
+export const upload = multer({
+  storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  }
+}).single('imageUrl');  
 
 // Add a journal entry with optional image
-// const addJournalEntry = async (req, res) => {
-//   try {
-//     const { id } = req.params; // Patient ID
-//     const { title } = req.body;
-//     let imageUrl = null;
+const addJournalEntry = async (req, res) => {
+  try {
+    const { id } = req.params; // Patient ID
+    const { title } = req.body;
+    let { imageUrl} = req.body;
 
-//     // Validate input
-//     if (!title || !content) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Title and content are required"
-//       });
-//     }
+    // Validate input - only title is required now
+    if (!title) {
+      return res.status(400).json({
+        success: false,
+        message: "Title is required"
+      });
+    }
 
-//     // Check if patient exists
-//     const patient = await prisma.patient.findUnique({
-//       where: { id }
-//     });
+    // Check if patient exists
+    const patient = await prisma.patient.findUnique({
+      where: { id }
+    });
 
-//     if (!patient) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Patient not found"
-//       });
-//     }
+    if (!patient) {
+      return res.status(404).json({
+        success: false,
+        message: "Patient not found"
+      });
+    }
 
-//     // Handle image upload if present
-//     if (req.file) {
-//       const fileExtension = req.file.originalname.split('.').pop();
-//       const fileName = `journal/${id}/${uuidv4()}.${fileExtension}`;
+    // Handle image upload if present
+    if (req.file) {
+      const fileExtension = req.file.originalname.split('.').pop();
+      const fileName = `journal/${id}/${uuidv4()}.${fileExtension}`;
+      
+      console.log("Uploading file to Supabase:", fileName);
+      
+      // Upload to Supabase Storage
+      const { data, error } = await supabase
+        .storage
+        .from('cross-care') // Bucket name
+        .upload(fileName, req.file.buffer, {
+          contentType: req.file.mimetype,
+          upsert: false
+        });
 
-//       // Set up S3 upload parameters
-//       const params = {
-//         Bucket: process.env.AWS_S3_BUCKET_NAME,
-//         Key: fileName,
-//         Body: req.file.buffer,
-//         ContentType: req.file.mimetype,
-//         ACL: 'public-read' // Make the file publicly accessible
-//       };
+      if (error) {
+        console.error("Error uploading to Supabase:", error);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to upload image",
+          error: error.message
+        });
+      }
 
-//       // Upload image to S3
-//       const uploadResult = await s3.upload(params).promise();
-//       imageUrl = uploadResult.Location; // Store the HTTPS URL
-//     }
+      console.log("Upload successful, getting public URL");
+      
+      // Get the public URL
+      const { data: urlData } = supabase
+        .storage
+        .from('cross-care') // Bucket name
+        .getPublicUrl(fileName);
 
-//     // Get current date and time
-//     const now = new Date();
+      imageUrl = urlData.publicUrl;
+      console.log("Generated image URL:", imageUrl);
+    }
 
-//     // Find or create an activity entry for today
-//     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-//     let activity = await prisma.patientActivity.findFirst({
-//       where: {
-//         patientId: id,
-//         date: {
-//           gte: today,
-//           lt: new Date(today.getTime() + 24 * 60 * 60 * 1000), // Next day
-//         },
-//       },
-//     });
+    // Get current date and time
+    const now = new Date();
 
-//     // If no activity for today, create one
-//     if (!activity) {
-//       activity = await prisma.patientActivity.create({
-//         data: {
-//           patientId: id,
-//           date: now,
-//         },
-//       });
-//     }
+    // Find or create an activity entry for today
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    let activity = await prisma.patientActivity.findFirst({
+      where: {
+        patientId: id,
+        date: {
+          gte: today,
+          lt: new Date(today.getTime() + 24 * 60 * 60 * 1000), // Next day
+        },
+      },
+    });
 
-//     // Create the journal entry
-//     const journalData = {
-//       title,
-//       imageUrl,
-//       createdAt: now.toISOString(),
-//     };
+    // If no activity for today, create one
+    if (!activity) {
+      activity = await prisma.patientActivity.create({
+        data: {
+          patientId: id,
+          date: now,
+        },
+      });
+    }
 
-//     // Update the wombPicture field with the journal data
-//     const updatedActivity = await prisma.patientActivity.update({
-//       where: { id: activity.id },
-//       data: {
-//         wombPicture: JSON.stringify(journalData),
-//       },
-//     });
+    // Create the WombPicture entry
+    const wombPictureData = {
+      patientActivityId: activity.id,
+      title,
+      imageUrl,
+      createdAt: now,
+    };
 
-//     return res.status(201).json({
-//       success: true,
-//       message: "Journal entry created successfully",
-//       data: {
-//         id: updatedActivity.id,
-//         patientId: updatedActivity.patientId,
-//         date: updatedActivity.date,
-//         journal: journalData,
-//       }
-//     });
-//   } catch (error) {
-//     console.error("Error creating journal entry:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Failed to create journal entry",
-//       error: error.message
-//     });
-//   }
-// };
+    const wombPicture = await prisma.wombPicture.create({
+      data: wombPictureData,
+    });
 
-// // Get all journal entries for a patient
+    return res.status(201).json({
+      success: true,
+      message: "Journal entry created successfully",
+      data: {
+        id: wombPicture.id,
+        patientActivityId: wombPicture.patientActivityId,
+        title: wombPicture.title,
+        imageUrl: wombPicture.imageUrl,
+        createdAt: wombPicture.createdAt,
+      }
+    });
+  } catch (error) {
+    console.error("Error creating journal entry:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to create journal entry",
+      error: error.message
+    });
+  }
+};
+
+// Get all journal entries for a patient
+const getJournalEntries = async (req, res) => {
+  try {
+    const { id } = req.params; // Patient ID
+
+    // Check if patient exists
+    const patient = await prisma.patient.findUnique({
+      where: { id }
+    });
+
+    if (!patient) {
+      return res.status(404).json({
+        success: false,
+        message: "Patient not found"
+      });
+    }
+
+    // Get all WombPicture entries related to the patient
+    const wombPictures = await prisma.wombPicture.findMany({
+      where: {
+        patientActivity: {
+          patientId: id,
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: wombPictures.map(wombPicture => ({
+        id: wombPicture.id,
+        patientActivityId: wombPicture.patientActivityId,
+        title: wombPicture.title,
+        imageUrl: wombPicture.imageUrl,
+        createdAt: wombPicture.createdAt,
+      }))
+    });
+  } catch (error) {
+    console.error("Error fetching journal entries:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch journal entries",
+      error: error.message
+    });
+  }
+};
+
+// Get a single journal entry
+const getJournalEntry = async (req, res) => {
+  try {
+    const { id, entryId } = req.params;
+
+    const wombPicture = await prisma.wombPicture.findUnique({
+      where: { id: entryId }
+    });
+
+    if (!wombPicture || wombPicture.patientActivity.patientId !== id) {
+      return res.status(404).json({
+        success: false,
+        message: "Journal entry not found"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        id: wombPicture.id,
+        patientActivityId: wombPicture.patientActivityId,
+        title: wombPicture.title,
+        imageUrl: wombPicture.imageUrl,
+        createdAt: wombPicture.createdAt,
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching journal entry:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch journal entry",
+      error: error.message
+    });
+  }
+};
+
+// Get all journal entries for a patient
 // const getJournalEntries = async (req, res) => {
 //   try {
 //     const { id } = req.params; // Patient ID
@@ -1688,7 +1785,6 @@ const markMedicationCompleted = async (req, res) => {
 //           patientId: activity.patientId,
 //           date: activity.date,
 //           title: journalData.title || "Untitled",
-//           content: journalData.content || "",
 //           imageUrl: journalData.imageUrl || null,
 //           createdAt: createdAt,
 //           formattedDate: formattedDate
@@ -1709,7 +1805,6 @@ const markMedicationCompleted = async (req, res) => {
 //     });
 //   }
 // };
-
 
 
 
@@ -1734,8 +1829,8 @@ export default {
     getMedications,
     getStepsStatus,
     markMedicationCompleted,
-    // addJournalEntry,
-    // getJournalEntries,
-    // getJournalEntry,
-    // upload,
+    addJournalEntry,
+    getJournalEntries,
+    getJournalEntry,
+    upload,
 };

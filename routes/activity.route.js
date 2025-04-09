@@ -1,5 +1,5 @@
 import { Router } from "express";
-import activityController from "../controllers/activity.controller.js";
+import activityController, { upload } from "../controllers/activity.controller.js";
 
 const router = new Router();
 
@@ -30,23 +30,31 @@ router.get('/user/activity/:id/getMedication', activityController.getMedications
 router.patch('/user/activity/:id/updateStatus/:id/completed', activityController.markMedicationCompleted);
 
 //add image in journal 
-// router.post(
-//     '/user/activity/:id/journal', 
-//     activityController.upload.single('image'), 
-//     activityController.addJournalEntry
-//   );
+router.post(
+    '/user/activity/:id/journal/upload', 
+    upload,
+    activityController.addJournalEntry
+  );
   
-//   // Get all journal entries for a patient
-// router.get('/user/activity/:id/journal', activityController.getJournalEntries);
+  // Get all journal entries for a patient
+  router.get(
+    '/user/activity/:id/journal', 
+    activityController.getJournalEntries
+  );
   
-//   // Get a specific journal entry
-// router.get('/user/activity/:id/journal/:entryId', activityController.getJournalEntry);
+  // Get a specific journal entry
+  router.get(
+    '/user/activity/:id/journal/:entryId', 
+    activityController.getJournalEntry
+  );
   
-// Update a journal entry (with optional new image)
-// router.put(
+  // Update a journal entry (with optional new image)
+//   router.put(
 //     '/user/activity/:id/journal/:entryId', 
-//     journalController.upload.single('image'), 
-//     journalController.updateJournalEntry
+//     activityController.upload.single('image'), 
+//     activityController.updateJournalEntry
 //   );
+  
+  // Delete a journal entry
 
 export default router;

@@ -47,8 +47,20 @@ model PatientActivity {
   stepsGoal   Int?
   meal        Meals[]
   medications Medication[]
+  wombPictures WombPicture[] // New relation
   patient     Patient      @relation(fields: [patientId], references: [id])
 }
+
+model WombPicture {
+  id                String          @id @default(uuid())
+  patientActivityId String
+  title             String
+  imageUrl          String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  patientActivity   PatientActivity @relation(fields: [patientActivityId], references: [id])
+}
+
 
 model Meals {
   mealId            String          @id @default(uuid())
