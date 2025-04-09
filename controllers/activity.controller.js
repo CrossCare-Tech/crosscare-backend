@@ -1619,15 +1619,90 @@ const getJournalEntries = async (req, res) => {
       }
     });
 
+    // Group the journal entries by today, last week, and previously
+    const groupedEntries = {
+      "Today": [],
+      "Last Week": [],
+      "Previously": []
+    };
+
+    const currentDate = new Date();
+    const startOfDay = new Date(currentDate.setHours(0, 0, 0, 0)); // Start of today
+    const endOfDay = new Date(currentDate.setHours(23, 59, 59, 999)); // End of today
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(currentDate.getDate() - 7); // 7 days ago from today
+
+    wombPictures.forEach((wombPicture) => {
+      const createdAt = new Date(wombPicture.createdAt);
+
+      // Convert the dates to UTC for consistent comparison
+      const createdAtUTC = Date.UTC(createdAt.getFullYear(), createdAt.getMonth(), createdAt.getDate());
+
+      // If the entry was created today
+      if (createdAt >= startOfDay && createdAt <= endOfDay) {
+        groupedEntries["Today"].push({
+          id: wombPicture.id,
+          title: wombPicture.title,
+          imageUrl: wombPicture.imageUrl,
+          date: createdAt.toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            hour12: true
+          })
+        });
+      } else if (createdAt >= sevenDaysAgo && createdAt < startOfDay) {
+        // If the entry was created in the last 7 days but not today
+        groupedEntries["Last Week"].push({
+          id: wombPicture.id,
+          title: wombPicture.title,
+          imageUrl: wombPicture.imageUrl,
+          date: createdAt.toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            hour12: true
+          })
+        });
+      } else {
+        // Otherwise, categorize as "Previously"
+        groupedEntries["Previously"].push({
+          id: wombPicture.id,
+          title: wombPicture.title,
+          imageUrl: wombPicture.imageUrl,
+          date: createdAt.toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: 'numeric',
+            hour12: true
+          })
+        });
+      }
+    });
+
+    // Return the grouped entries in the desired format
     return res.status(200).json({
       success: true,
-      data: wombPictures.map(wombPicture => ({
-        id: wombPicture.id,
-        patientActivityId: wombPicture.patientActivityId,
-        title: wombPicture.title,
-        imageUrl: wombPicture.imageUrl,
-        createdAt: wombPicture.createdAt,
-      }))
+      data: [
+        {
+          title: "Today",
+          items: groupedEntries["Today"]
+        },
+        {
+          title: "Last Week",
+          items: groupedEntries["Last Week"]
+        },
+        {
+          title: "Previously",
+          items: groupedEntries["Previously"]
+        }
+      ]
     });
   } catch (error) {
     console.error("Error fetching journal entries:", error);
