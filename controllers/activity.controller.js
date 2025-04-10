@@ -1473,7 +1473,8 @@ const addJournalEntry = async (req, res) => {
   try {
     const { id } = req.params; // Patient ID
     const { title } = req.body;
-    let { imageUrl} = req.body;
+    let { imageUrl } = req.body;
+    console.log(imageUrl);
 
     // Validate input - only title is required now
     if (!title) {
@@ -1523,10 +1524,19 @@ const addJournalEntry = async (req, res) => {
       console.log("Upload successful, getting public URL");
       
       // Get the public URL
-      const { data: urlData } = supabase
+      const { data: urlData, error: urlError } = supabase
         .storage
         .from('cross-care') // Bucket name
         .getPublicUrl(fileName);
+
+      if (urlError) {
+        console.error("Error getting public URL:", urlError);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to get public URL",
+          error: urlError.message
+        });
+      }
 
       imageUrl = urlData.publicUrl;
       console.log("Generated image URL:", imageUrl);
@@ -1574,7 +1584,7 @@ const addJournalEntry = async (req, res) => {
       message: "Journal entry created successfully",
       data: {
         id: wombPicture.id,
-        patientActivityId: wombPicture.patientActivityId,
+        // patientActivityId: wombPicture.patientActivityId,
         title: wombPicture.title,
         imageUrl: wombPicture.imageUrl,
         createdAt: wombPicture.createdAt,
@@ -1589,6 +1599,7 @@ const addJournalEntry = async (req, res) => {
     });
   }
 };
+
 
 // Get all journal entries for a patient
 const getJournalEntries = async (req, res) => {
@@ -1638,20 +1649,24 @@ const getJournalEntries = async (req, res) => {
       // Convert the dates to UTC for consistent comparison
       const createdAtUTC = Date.UTC(createdAt.getFullYear(), createdAt.getMonth(), createdAt.getDate());
 
+      // Custom format for date (dd/mm/yyyy, hh:mm a)
+      const day = createdAt.getDate();
+      const month = createdAt.getMonth() + 1; // Months are zero-indexed
+      const year = createdAt.getFullYear();
+      const hours = createdAt.getHours();
+      const minutes = createdAt.getMinutes();
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      const formattedTime = `${(hours % 12) || 12}:${minutes < 10 ? '0' + minutes : minutes} ${ampm}`;
+
+      const formattedDate = `${day}/${month}/${year}, ${formattedTime}`;
+
       // If the entry was created today
       if (createdAt >= startOfDay && createdAt <= endOfDay) {
         groupedEntries["Today"].push({
           id: wombPicture.id,
           title: wombPicture.title,
           imageUrl: wombPicture.imageUrl,
-          date: createdAt.toLocaleString('en-US', {
-            year: 'numeric',
-            month: 'numeric',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: 'numeric',
-            hour12: true
-          })
+          date: formattedDate
         });
       } else if (createdAt >= sevenDaysAgo && createdAt < startOfDay) {
         // If the entry was created in the last 7 days but not today
@@ -1659,14 +1674,7 @@ const getJournalEntries = async (req, res) => {
           id: wombPicture.id,
           title: wombPicture.title,
           imageUrl: wombPicture.imageUrl,
-          date: createdAt.toLocaleString('en-US', {
-            year: 'numeric',
-            month: 'numeric',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: 'numeric',
-            hour12: true
-          })
+          date: formattedDate
         });
       } else {
         // Otherwise, categorize as "Previously"
@@ -1674,14 +1682,7 @@ const getJournalEntries = async (req, res) => {
           id: wombPicture.id,
           title: wombPicture.title,
           imageUrl: wombPicture.imageUrl,
-          date: createdAt.toLocaleString('en-US', {
-            year: 'numeric',
-            month: 'numeric',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: 'numeric',
-            hour12: true
-          })
+          date: formattedDate
         });
       }
     });
@@ -1719,36 +1720,53 @@ const getJournalEntry = async (req, res) => {
   try {
     const { id, entryId } = req.params;
 
+    // Modify the query to include the patientActivity
     const wombPicture = await prisma.wombPicture.findUnique({
-      where: { id: entryId }
+      where: { id: entryId },
+      include: {
+        patientActivity: true,  // This will include the related patientActivity
+      },
     });
 
+    // Check if wombPicture exists and if patientActivity.patientId matches the requested id
     if (!wombPicture || wombPicture.patientActivity.patientId !== id) {
       return res.status(404).json({
         success: false,
-        message: "Journal entry not found"
+        message: "Journal entry not found",
       });
     }
+
+    // Format the createdAt date properly
+    const createdAt = new Date(wombPicture.createdAt); // Convert the createdAt field to a Date object
+    const day = createdAt.getDate();
+    const month = createdAt.getMonth() + 1; // Months are zero-indexed
+    const year = createdAt.getFullYear();
+    const hours = createdAt.getHours();
+    const minutes = createdAt.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const formattedTime = `${(hours % 12) || 12}:${minutes < 10 ? '0' + minutes : minutes} ${ampm}`;
+    const formattedDate = `${day}/${month}/${year}, ${formattedTime}`;
 
     return res.status(200).json({
       success: true,
       data: {
         id: wombPicture.id,
-        patientActivityId: wombPicture.patientActivityId,
         title: wombPicture.title,
         imageUrl: wombPicture.imageUrl,
-        createdAt: wombPicture.createdAt,
-      }
+        createdAt: formattedDate, // Use the formatted date
+      },
     });
   } catch (error) {
     console.error("Error fetching journal entry:", error);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch journal entry",
-      error: error.message
+      error: error.message,
     });
   }
 };
+
+
 
 // Get all journal entries for a patient
 // const getJournalEntries = async (req, res) => {
@@ -1881,6 +1899,124 @@ const getJournalEntry = async (req, res) => {
 //   }
 // };
 
+// Update a journal entry with optional new image
+const updateJournalEntry = async (req, res) => {
+  try {
+    const { id, entryId } = req.params; // Patient ID and Entry ID
+    const { title } = req.body;
+    let { imageUrl } = req.body; // Existing image URL if provided
+    console.log("Title:", title);
+    console.log("Existing Image URL:", imageUrl);
+
+    // Validate input - title is required for updating
+    if (!title) {
+      return res.status(400).json({
+        success: false,
+        message: "Title is required"
+      });
+    }
+
+    // Check if patient exists
+    const patient = await prisma.patient.findUnique({
+      where: { id }
+    });
+
+    if (!patient) {
+      return res.status(404).json({
+        success: false,
+        message: "Patient not found"
+      });
+    }
+
+    // Check if journal entry exists
+    const wombPicture = await prisma.wombPicture.findUnique({
+      where: { id: entryId }
+    });
+
+    if (!wombPicture) {
+      return res.status(404).json({
+        success: false,
+        message: "Journal entry not found"
+      });
+    }
+
+    // Handle image upload if a new file is uploaded
+    if (req.file) {
+      const fileExtension = req.file.originalname.split('.').pop();
+      const fileName = `journal/${id}/${uuidv4()}.${fileExtension}`;
+
+      console.log("Uploading file to Supabase:", fileName);
+
+      // Upload to Supabase Storage
+      const { data, error } = await supabase
+        .storage
+        .from('cross-care') // Bucket name
+        .upload(fileName, req.file.buffer, {
+          contentType: req.file.mimetype,
+          upsert: false
+        });
+
+      if (error) {
+        console.error("Error uploading to Supabase:", error);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to upload image",
+          error: error.message
+        });
+      }
+
+      console.log("Upload successful, getting public URL");
+
+      // Get the public URL of the uploaded image
+      const { data: urlData, error: urlError } = await supabase
+        .storage
+        .from('cross-care') // Bucket name
+        .getPublicUrl(fileName);
+
+      if (urlError) {
+        console.error("Error getting public URL:", urlError);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to get public URL",
+          error: urlError.message
+        });
+      }
+
+      // Use the newly generated public URL for image
+      imageUrl = urlData.publicUrl;
+      console.log("Generated new image URL:", imageUrl);
+    }
+
+    // Update the journal entry
+    const updatedWombPicture = await prisma.wombPicture.update({
+      where: { id: entryId },
+      data: {
+        title,
+        imageUrl: imageUrl || wombPicture.imageUrl, // Use new URL if available, otherwise keep the old one
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Journal entry updated successfully",
+      data: {
+        id: updatedWombPicture.id,
+        patientActivityId: updatedWombPicture.patientActivityId,
+        title: updatedWombPicture.title,
+        imageUrl: updatedWombPicture.imageUrl,
+        createdAt: updatedWombPicture.createdAt,
+      }
+    });
+  } catch (error) {
+    console.error("Error updating journal entry:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update journal entry",
+      error: error.message
+    });
+  }
+};
+
 
 
 export default {
@@ -1908,4 +2044,5 @@ export default {
     getJournalEntries,
     getJournalEntry,
     upload,
+    updateJournalEntry
 };

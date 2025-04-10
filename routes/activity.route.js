@@ -49,11 +49,11 @@ router.post(
   );
   
   // Update a journal entry (with optional new image)
-//   router.put(
-//     '/user/activity/:id/journal/:entryId', 
-//     activityController.upload.single('image'), 
-//     activityController.updateJournalEntry
-//   );
+  router.put(
+    '/user/activity/:id/journal/:entryId', 
+    upload,
+    activityController.updateJournalEntry
+  );
   
   // Delete a journal entry
 
