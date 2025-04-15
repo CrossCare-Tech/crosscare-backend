@@ -15,6 +15,7 @@ model Patient {
   updatedAt  DateTime          @default(now()) @map("updated_at")
   name       String
   age        Int?
+  profileImage     String?           @map("profile_image")
   doctorId   String?
   activities PatientActivity[]
   questionResponses  QuestionResponse[]
