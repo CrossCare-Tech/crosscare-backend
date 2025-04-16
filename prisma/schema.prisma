@@ -16,6 +16,7 @@ model Patient {
   name       String
   age        Int?
   profileImage     String?           @map("profile_image")
+  week       Int?
   doctorId   String?
   activities PatientActivity[]
   questionResponses  QuestionResponse[]
