@@ -7,6 +7,9 @@ const router = new Router();
 
 router.get('/user/:id/profile', authenticateMiddleware, userController.getProfileDetails);
 router.post('/user/:id/profile/image', authenticateMiddleware, upload, userController.uploadProfileImage);
+router.put('/user/:id/pregnancy-week', authenticateMiddleware, userController.updatePregnancyWeek);
+router.get('/user/:id/pregnancy-week', authenticateMiddleware, userController.getPregnancyWeek);
+router.put('/user/:id/profile', authenticateMiddleware, userController.updateProfile);
 
 export default router;
 
