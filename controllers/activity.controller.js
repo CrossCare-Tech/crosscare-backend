@@ -1546,8 +1546,8 @@ const addJournalEntry = async (req, res) => {
     const now = new Date();
     
     // For finding today's activities, use local midnight
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    // today.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     let activity = await prisma.patientActivity.findFirst({
       where: {
         patientId: id,
@@ -1580,16 +1580,16 @@ const addJournalEntry = async (req, res) => {
       data: wombPictureData,
     });
 
-    // const year = wombPicture.createdAt.getFullYear();
-    // const month = String(wombPicture.createdAt.getMonth() + 1).padStart(2, '0');
-    // const day = String(wombPicture.createdAt.getDate()).padStart(2, '0');
-    // const hours = String(wombPicture.createdAt.getHours()).padStart(2, '0');
-    // const minutes = String(wombPicture.createdAt.getMinutes()).padStart(2, '0');
-    // const seconds = String(wombPicture.createdAt.getSeconds()).padStart(2, '0');
-    // const milliseconds = String(wombPicture.createdAt.getMilliseconds()).padStart(3, '0');
+    const year = wombPicture.createdAt.getFullYear();
+    const month = String(wombPicture.createdAt.getMonth() + 1).padStart(2, '0');
+    const day = String(wombPicture.createdAt.getDate()).padStart(2, '0');
+    const hours = String(wombPicture.createdAt.getHours()).padStart(2, '0');
+    const minutes = String(wombPicture.createdAt.getMinutes()).padStart(2, '0');
+    const seconds = String(wombPicture.createdAt.getSeconds()).padStart(2, '0');
+    const milliseconds = String(wombPicture.createdAt.getMilliseconds()).padStart(3, '0');
     
-    // // Format in ISO-like format but using local time values
-    // const localFormattedDate = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}`;
+    // Format in ISO-like format but using local time values
+    const localFormattedDate = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}`;
     
     return res.status(201).json({
       success: true,
@@ -1599,7 +1599,7 @@ const addJournalEntry = async (req, res) => {
         // patientActivityId: wombPicture.patientActivityId,
         title: wombPicture.title,
         imageUrl: wombPicture.imageUrl,
-        createdAt: wombPicture.createdAt,
+        createdAt: localFormattedDate,
       }
     });
   } catch (error) {
