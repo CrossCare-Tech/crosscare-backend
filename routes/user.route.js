@@ -1,7 +1,6 @@
 import {Router} from 'express'
-import getProfileDetails from '../controllers/user.controller.js';
 import authenticateMiddleware from '../middleware/auth.middleware.js';
-import userController, { upload } from '../controllers/user.controller.js';
+import userController, { upload, upload1 } from '../controllers/user.controller.js';
 
 const router = new Router();
 
@@ -10,6 +9,7 @@ router.post('/user/:id/profile/image', authenticateMiddleware, upload, userContr
 router.put('/user/:id/pregnancy-week', authenticateMiddleware, userController.updatePregnancyWeek);
 router.get('/user/:id/pregnancy-week', authenticateMiddleware, userController.getPregnancyWeek);
 router.put('/user/:id/profile', authenticateMiddleware, userController.updateProfile);
+router.post('/user/:id/avatar', authenticateMiddleware, upload1, userController.uploadAvatar);
 
 export default router;
 

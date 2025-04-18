@@ -53,7 +53,8 @@ const supabaseUrl = 'https://tskzddfyjazcirdvloch.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRza3pkZGZ5amF6Y2lyZHZsb2NoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA1MDc0NDYsImV4cCI6MjA1NjA4MzQ0Nn0.g4zXLk_GWg0VgvYEpye_bLshsMTpvaZHXXe3xP1cLCg';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Configure multer for memory storage
+// avatarController.js - Updated multer configuration
+
 const storage = multer.memoryStorage();
 export const upload = multer({
   storage,
@@ -61,6 +62,12 @@ export const upload = multer({
     fileSize: 5 * 1024 * 1024, // 5MB limit
   }
 }).single('imageUrl'); 
+export const upload1 = multer({
+  storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  }
+}).single('avatarUrl'); 
 
 const uploadProfileImage = async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1]; // Get token from Authorization header
@@ -205,9 +212,9 @@ const updatePregnancyWeek = async (req, res) => {
         error: error.message
       });
     }
-  };
+};
 
-  const getPregnancyWeek = async (req, res) => {
+const getPregnancyWeek = async (req, res) => {
     try {
       // Extract patient ID from the request parameters
       const { id } = req.params;
@@ -342,4 +349,112 @@ const updatePregnancyWeek = async (req, res) => {
     }
   };
 
-export default {getProfileDetails, uploadProfileImage, upload, updatePregnancyWeek, getPregnancyWeek, updateProfile};
+  const uploadAvatar = async (req, res) => {
+    try {
+      // Get token from authorization header
+      const token = req.headers.authorization?.split(' ')[1];
+  
+      if (!token) {
+        return res.status(401).json({
+          success: false,
+          message: "Authorization token required"
+        });
+      }
+  
+      try {
+        // Verify the token and extract userId
+        const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
+  
+        if (!decoded || !decoded.userId) {
+          return res.status(401).json({
+            success: false,
+            message: "Invalid or expired token"
+          });
+        }
+  
+        // Get userId from the decoded token
+        const userId = decoded.userId;
+  
+        // First check if patient exists
+        const patient = await prisma.patient.findUnique({
+          where: { id: userId }
+        });
+  
+        if (!patient) {
+          return res.status(404).json({
+            success: false,
+            message: 'Patient not found'
+          });
+        }
+  
+        // Check if file exists
+        if (!req.file) {
+          return res.status(400).json({
+            success: false,
+            message: 'No file uploaded'
+          });
+        }
+  
+        // Generate a unique file name
+        const fileExt = req.file.originalname.split('.').pop();
+        const fileName = `avatar-${userId}-${uuidv4()}.${fileExt}`;
+        const filePath = `avatars/${fileName}`;
+  
+        // Upload file to Supabase Storage
+        const { data, error } = await supabase
+          .storage
+          .from('cross-care') // Bucket name
+          .upload(filePath, req.file.buffer, {
+            contentType: req.file.mimetype,
+            cacheControl: '3600'
+          });
+  
+        if (error) {
+          console.error('Supabase upload error:', error);
+          return res.status(500).json({
+            success: false,
+            message: 'Failed to upload avatar to storage',
+            error: error.message
+          });
+        }
+  
+        // Get the public URL for the uploaded file
+        const { data: urlData } = supabase
+          .storage
+          .from('cross-care')
+          .getPublicUrl(filePath);
+  
+        const avatarUrl = urlData.publicUrl;
+  
+        // Update the patient record with the new avatar URL
+        const updatedPatient = await prisma.patient.update({
+          where: { id: userId },
+          data: { avatarUrl }
+        });
+  
+        res.status(200).json({
+          success: true,
+          message: 'Avatar uploaded successfully',
+          data: {
+            avatarUrl,
+          }
+        });
+      } catch (jwtError) {
+        console.error('JWT verification error:', jwtError);
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid token',
+          error: jwtError.message
+        });
+      }
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to process avatar upload',
+        error: error.message
+      });
+    }
+  };
+
+export default {getProfileDetails, uploadProfileImage, upload, updatePregnancyWeek, getPregnancyWeek, updateProfile, uploadAvatar, upload1};
