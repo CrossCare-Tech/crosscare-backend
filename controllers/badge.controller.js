@@ -107,16 +107,27 @@ const awardHabitBadge = async (req, res) => {
   }
 };
 
+// Updated controller function for the backend
 const awardMilestoneBadge = async (req, res) => {
   try {
-    const { patientId, badgeType, title, description } = req.body;
+    // Extract parameters from request body and params
+    const { id } = req.params; // Extract from URL parameters
+    const { badgeType, title, description } = req.body;
+    const patientId = id; // Use the ID from the URL parameter
     
-    // if (!patientId || !badgeType) {
-    //   return res.status(400).json({ 
-    //     success: false, 
-    //     message: "Patient ID and badge type are required" 
-    //   });
-    // }
+    console.log("Awarding badge with params:", {
+      patientId,
+      badgeType,
+      title,
+      description
+    });
+    
+    if (!patientId || !badgeType) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Patient ID and badge type are required" 
+      });
+    }
     
     // Check if the patient exists
     const patient = await prisma.patient.findUnique({ 
@@ -139,8 +150,8 @@ const awardMilestoneBadge = async (req, res) => {
       badge = await prisma.badge.create({
         data: {
           type: badgeType,
-          title: title,
-          description: description,
+          title: title || `Badge ${badgeType}`,
+          description: description || `Achievement badge ${badgeType}`,
         },
       });
       console.log(`Created badge: ${badgeType}`, badge);
