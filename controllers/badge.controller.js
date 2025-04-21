@@ -108,16 +108,15 @@ const awardHabitBadge = async (req, res) => {
 };
 
 const awardMilestoneBadge = async (req, res) => {
-  const { patientId } = req.params;
-  const { badgeType, title, description } = req.body;
   try {
+    const { patientId, badgeType, title, description } = req.body;
     
-    if (!patientId || !badgeType) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Patient ID and badge type are required" 
-      });
-    }
+    // if (!patientId || !badgeType) {
+    //   return res.status(400).json({ 
+    //     success: false, 
+    //     message: "Patient ID and badge type are required" 
+    //   });
+    // }
     
     // Check if the patient exists
     const patient = await prisma.patient.findUnique({ 
