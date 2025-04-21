@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { BadgeType, PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 import { createClient } from '@supabase/supabase-js';
 // import AWS from "aws-sdk";
@@ -45,7 +45,47 @@ const getUserActivities = async (req, res) => {
           return acc;
       }, {});
 
-      res.status(200).json(Object.values(mergedActivities));
+      const hotMamaBadgeResult = await checkAndAwardHotMamaBadge(id);
+      
+      // Check for Health Queen badge
+      const healthQueenBadgeResult = await checkAndAwardHealthQueenBadge(id);
+      
+      // Get all the patient's badges to include in the response
+      const patientBadges = await prisma.patientBadge.findMany({
+          where: { patientId: id },
+          include: {
+              badge: {
+                  select: {
+                      type: true,
+                      title: true,
+                      description: true,
+                      createdAt: true,
+                  }
+              }
+          }
+      });
+
+      // Determine if any new badges were awarded
+      const newBadge = 
+          (healthQueenBadgeResult && healthQueenBadgeResult.awarded) ? healthQueenBadgeResult.badge :
+          (hotMamaBadgeResult && hotMamaBadgeResult.awarded) ? hotMamaBadgeResult.badge :
+          null;
+
+      // Combine badge progress information
+      const badgeProgress = {
+          hotMama: hotMamaBadgeResult && !hotMamaBadgeResult.awarded && hotMamaBadgeResult.progress ? 
+              hotMamaBadgeResult.progress : null,
+          healthQueen: healthQueenBadgeResult && !healthQueenBadgeResult.awarded && healthQueenBadgeResult.progress ? 
+              healthQueenBadgeResult.progress : null
+      };
+
+      res.status(200).json({
+          activities: Object.values(mergedActivities),
+          badges: patientBadges,
+          newBadge,
+          badgeProgress
+      });
+
   } catch (error) {
       console.error("Error fetching activities:", error);
       res.status(500).json({ message: "Internal Server Error", details: error.message });
@@ -94,6 +134,306 @@ const findOrCreateActivity = async (patientId) => {
   return activity;
 };
 
+// Function to check and award "Health Queen" badge for logging all habits daily for a month
+const checkAndAwardHealthQueenBadge = async (patientId) => {
+  try {
+    // Get the current date
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    
+    // Get the first day of the current month
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    
+    // Get the last day of the current month
+    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    
+    // Find all activities in the current month
+    const activities = await prisma.patientActivity.findMany({
+      where: {
+        patientId: String(patientId),
+        date: {
+          gte: firstDayOfMonth,
+          lte: lastDayOfMonth,
+        },
+      },
+    });
+    
+    // Group activities by date to ensure we count unique days
+    const activitiesByDate = {};
+    activities.forEach(activity => {
+      const dateString = activity.date.toISOString().split('T')[0];
+      if (!activitiesByDate[dateString]) {
+        activitiesByDate[dateString] = activity;
+      }
+    });
+    
+    // Count days where all habits are logged
+    let daysWithAllHabits = 0;
+    
+    // Get the total number of days in the month
+    const daysInMonth = lastDayOfMonth.getDate();
+    
+    // Track which dates have all habits logged
+    const datesWithAllHabits = [];
+    
+    // Check each day in the month
+    for (let i = 1; i <= daysInMonth; i++) {
+      const currentDate = new Date(today.getFullYear(), today.getMonth(), i);
+      const dateString = currentDate.toISOString().split('T')[0];
+      
+      const activity = activitiesByDate[dateString];
+      
+      if (activity) {
+        // Check if water was logged
+        const hasWater = activity.water !== null && activity.water > 0;
+        
+        // Check if sleep was logged
+        const hasSleep = activity.sleepStart !== null && activity.sleepEnd !== null;
+        
+        // Check if a meal/food was logged (through a meal log or nutrition entry)
+        // This will need to be adapted based on how you track food - for example, through wombPictures with food tags
+        // For now, we'll assume there's a separate system for tracking meals
+        
+        // For demonstration, we'll check if there's any meal-related data
+        // You'll need to customize this based on your actual data structure
+        const hasFood = true; // Replace with actual food logging check
+        
+        // If all three habits were logged on this day
+        if (hasWater && hasSleep && hasFood) {
+          daysWithAllHabits++;
+          datesWithAllHabits.push(dateString);
+        }
+      }
+    }
+    
+    console.log(`Found ${daysWithAllHabits} days with all habits logged out of ${daysInMonth} days in the month`);
+    
+    // Calculate the percentage of days with all habits logged
+    const percentageComplete = Math.round((daysWithAllHabits / daysInMonth) * 100);
+    
+    // Check if all habits were logged every day of the month
+    // You can adjust the threshold as needed (e.g., 90% of days or 27 out of 30 days)
+    if (daysWithAllHabits >= daysInMonth) {
+      console.log("🏅 All habits logged daily for the entire month, checking for Health Queen badge...");
+      
+      // Check if the badge exists in the database
+      let badge = await prisma.badge.findUnique({
+        where: { type: BadgeType.HEALTH_QUEEN },
+      });
+      
+      // If the badge doesn't exist, create it
+      if (!badge) {
+        badge = await prisma.badge.create({
+          data: {
+            type: BadgeType.HEALTH_QUEEN,
+            title: "Health Queen",
+            description: "Logged all habits daily for a month (food, water, sleep)",
+          },
+        });
+        console.log("✨ Created Health Queen badge:", badge);
+      }
+      
+      // Check if this patient already has the badge
+      const alreadyAwarded = await prisma.patientBadge.findUnique({
+        where: {
+          patientId_badgeId: {
+            patientId,
+            badgeId: badge.id,
+          },
+        },
+      });
+      
+      // If not already awarded, award the badge
+      if (!alreadyAwarded) {
+        const awarded = await prisma.patientBadge.create({
+          data: {
+            patientId,
+            badgeId: badge.id,
+          },
+        });
+        console.log("✅ Awarded Health Queen badge:", awarded);
+        
+        return {
+          awarded: true,
+          badge: {
+            type: badge.type,
+            title: badge.title,
+            description: badge.description
+          }
+        };
+      } else {
+        console.log("ℹ️ Health Queen badge already awarded earlier.");
+        return { awarded: false };
+      }
+    } else {
+      console.log(`ℹ️ Only ${daysWithAllHabits}/${daysInMonth} days with all habits logged.`);
+      return { 
+        awarded: false, 
+        reason: `Only ${daysWithAllHabits}/${daysInMonth} days with all habits logged.`,
+        progress: {
+          daysCompleted: daysWithAllHabits,
+          daysRequired: daysInMonth,
+          percentageComplete: percentageComplete
+        }
+      };
+    }
+  } catch (error) {
+    console.error("Error checking/awarding Health Queen badge:", error);
+    return { awarded: false, error: error.message };
+  }
+};
+
+
+// Function to check and award "Hot Mama" badge for 3-month consistency streak
+const checkAndAwardHotMamaBadge = async (patientId) => {
+  try {
+    // Get the current date
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    
+    // We need to check three consecutive months
+    const currentMonth = {
+      start: new Date(today.getFullYear(), today.getMonth(), 1),
+      end: new Date(today.getFullYear(), today.getMonth() + 1, 0)
+    };
+    
+    const lastMonth = {
+      start: new Date(today.getFullYear(), today.getMonth() - 1, 1),
+      end: new Date(today.getFullYear(), today.getMonth(), 0)
+    };
+    
+    const twoMonthsAgo = {
+      start: new Date(today.getFullYear(), today.getMonth() - 2, 1),
+      end: new Date(today.getFullYear(), today.getMonth() - 1, 0)
+    };
+    
+    // Define months to check
+    const monthsToCheck = [twoMonthsAgo, lastMonth, currentMonth];
+    
+    // Track results for each month
+    const monthResults = [];
+    
+    // For each month, check if the user had at least 25 days of activity
+    for (const month of monthsToCheck) {
+      // Find all activities in this month
+      const activities = await prisma.patientActivity.findMany({
+        where: {
+          patientId: String(patientId),
+          date: {
+            gte: month.start,
+            lte: month.end,
+          },
+        },
+      });
+      
+      // Count days with any activity (water, sleep, steps)
+      const daysWithActivity = new Set();
+      
+      activities.forEach(activity => {
+        // Check if this activity has any tracked data
+        if (
+          (activity.water !== null && activity.water > 0) || 
+          (activity.steps !== null && activity.steps > 0) || 
+          (activity.sleepStart !== null && activity.sleepEnd !== null) ||
+          (activity.heart_rate !== null && activity.heart_rate > 0) ||
+          (activity.weight !== null)
+        ) {
+          // Add the date string to the set to count unique days
+          const dateString = activity.date.toISOString().split('T')[0];
+          daysWithActivity.add(dateString);
+        }
+      });
+      
+      // Get total days in this month
+      const daysInMonth = (month.end.getDate() - month.start.getDate()) + 1;
+      
+      // Add result for this month
+      monthResults.push({
+        monthName: month.start.toLocaleString('default', { month: 'long', year: 'numeric' }),
+        daysWithActivity: daysWithActivity.size,
+        daysInMonth,
+        consistencyMet: daysWithActivity.size >= 25
+      });
+    }
+    
+    console.log("Monthly consistency results:", monthResults);
+    
+    // Check if all three months met the 25-day threshold
+    const allMonthsConsistent = monthResults.every(month => month.consistencyMet);
+    
+    if (allMonthsConsistent) {
+      console.log("🏅 3-month consistency streak detected, checking for Hot Mama badge...");
+      
+      // Check if the badge exists in the database
+      let badge = await prisma.badge.findUnique({
+        where: { type: BadgeType.HOT_MAMA },
+      });
+      
+      // If the badge doesn't exist, create it
+      if (!badge) {
+        badge = await prisma.badge.create({
+          data: {
+            type: BadgeType.HOT_MAMA,
+            title: "Hot Mama",
+            description: "3 month streak with being consistent at least 25/30 days in each month",
+          },
+        });
+        console.log("✨ Created Hot Mama badge:", badge);
+      }
+      
+      // Check if this patient already has the badge
+      const alreadyAwarded = await prisma.patientBadge.findUnique({
+        where: {
+          patientId_badgeId: {
+            patientId,
+            badgeId: badge.id,
+          },
+        },
+      });
+      
+      // If not already awarded, award the badge
+      if (!alreadyAwarded) {
+        const awarded = await prisma.patientBadge.create({
+          data: {
+            patientId,
+            badgeId: badge.id,
+          },
+        });
+        console.log("✅ Awarded Hot Mama badge:", awarded);
+        
+        return {
+          awarded: true,
+          badge: {
+            type: badge.type,
+            title: badge.title,
+            description: badge.description
+          }
+        };
+      } else {
+        console.log("ℹ️ Hot Mama badge already awarded earlier.");
+        return { awarded: false };
+      }
+    } else {
+      // Calculate overall progress
+      const completedMonths = monthResults.filter(month => month.consistencyMet).length;
+      
+      console.log(`ℹ️ Only ${completedMonths}/3 months with 25+ days of activity detected.`);
+      return { 
+        awarded: false, 
+        reason: `Only ${completedMonths}/3 months with 25+ days of activity.`,
+        progress: {
+          monthsCompleted: completedMonths,
+          monthsRequired: 3,
+          monthDetails: monthResults
+        }
+      };
+    }
+  } catch (error) {
+    console.error("Error checking/awarding Hot Mama badge:", error);
+    return { awarded: false, error: error.message };
+  }
+};
+
 
 // Log Water Intake
 const logWaterIntake = async (req, res) => {
@@ -132,10 +472,181 @@ const logWaterIntake = async (req, res) => {
           },
       });
 
-      res.status(200).json(updatedActivity);
+      const waterLogs = await prisma.patientActivity.findMany({
+        where: {
+          patientId: id,
+          water: { not: null },
+        },
+      });
+
+      let firstLogBadge = null;
+      if (waterLogs.length === 1) {
+        console.log("🏅 First water entry detected, attempting badge award...");
+  
+        let badge = await prisma.badge.findUnique({
+          where: { type: BadgeType.HYDRATED_QUEEN },
+        });
+  
+        if (!badge) {
+          badge = await prisma.badge.create({
+            data: {
+              type: BadgeType.HYDRATED_QUEEN,
+              title: "Hydrated Queen",
+              description: "First time water is logged",
+            },
+          });
+          console.log("✨ Created badge:", badge);
+        }
+  
+        const alreadyAwarded = await prisma.patientBadge.findUnique({
+          where: {
+            patientId_badgeId: {
+              patientId: id,
+              badgeId: badge.id,
+            },
+          },
+        });
+  
+        if (!alreadyAwarded) {
+          const awarded = await prisma.patientBadge.create({
+            data: {
+              patientId: id,
+              badgeId: badge.id,
+            },
+          });
+          console.log("✅ Awarded badge:", awarded);
+          firstLogBadge = awarded;
+        } else {
+          console.log("ℹ️ Badge already awarded earlier.");
+        }
+      }
+      
+      // Check for water streak badge
+      const streakResult = await checkWaterStreakBadge(id);
+      
+      // Get all the patient's badges to include in the response
+      const patientBadges = await prisma.patientBadge.findMany({
+        where: { patientId: id },
+        include: {
+          badge: {
+            select: {
+              type: true,
+              title: true,
+              description: true,
+              createdAt: true,
+            }
+          }
+        }
+      });
+
+      res.status(200).json({
+        updatedActivity, 
+        waterLogs,
+        badges: patientBadges,
+        newBadges: {
+          firstLog: firstLogBadge,
+          streak: streakResult.awarded ? streakResult.badge : null
+        }
+      });
   } catch (error) {
       console.error("Error logging water intake:", error);
       res.status(500).json({ message: "Error logging water intake", error: error.message });
+  }
+};
+
+// Function to check for water streak and award Water Wizard badge
+const checkWaterStreakBadge = async (patientId) => {
+  try {
+    // Get the current date and set to midnight
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    
+    // Calculate 7 days ago
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(today.getDate() - 6);
+    
+    // Find all activities in the past 7 days
+    const activities = await prisma.patientActivity.findMany({
+      where: {
+        patientId: String(patientId),
+        date: {
+          gte: sevenDaysAgo,
+          lte: today,
+        },
+        water: { not: null }, // Only count days where water was logged
+      },
+      orderBy: { date: 'asc' },
+    });
+    
+    // Check if we have a perfect streak (7 days of water logging)
+    // First, create an array of dates we're looking for
+    const requiredDates = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(sevenDaysAgo);
+      date.setDate(sevenDaysAgo.getDate() + i);
+      requiredDates.push(date.toISOString().split('T')[0]);
+    }
+    
+    // Map activity dates to YYYY-MM-DD format
+    const activityDates = activities.map(activity => 
+      activity.date.toISOString().split('T')[0]
+    );
+    
+    // Check if all required dates have a water log
+    const hasCompleteStreak = requiredDates.every(date => 
+      activityDates.includes(date)
+    );
+    
+    if (hasCompleteStreak) {
+      // Check if badge exists, create if it doesn't
+      let badge = await prisma.badge.findUnique({
+        where: { type: BadgeType.WATER_WIZARD },
+      });
+      
+      if (!badge) {
+        badge = await prisma.badge.create({
+          data: {
+            type: BadgeType.WATER_WIZARD,
+            title: "Water Wizard",
+            description: "Logged water daily for a week",
+          },
+        });
+      }
+      
+      // Check if the badge has already been awarded to this patient
+      const alreadyAwarded = await prisma.patientBadge.findUnique({
+        where: {
+          patientId_badgeId: {
+            patientId: patientId,
+            badgeId: badge.id,
+          },
+        },
+      });
+      
+      // Award the badge if not already awarded
+      if (!alreadyAwarded) {
+        await prisma.patientBadge.create({
+          data: {
+            patientId: patientId,
+            badgeId: badge.id,
+          },
+        });
+        
+        return {
+          awarded: true,
+          badge: {
+            type: badge.type,
+            title: badge.title,
+            description: badge.description
+          }
+        };
+      }
+    }
+    
+    return { awarded: false };
+  } catch (error) {
+    console.error("Error checking water streak badge:", error);
+    return { awarded: false, error: error.message };
   }
 };
 
@@ -224,14 +735,219 @@ const getWaterStatus = async (req, res) => {
           goalMl: goalMl, // Fixed: changed 'wate' to 'goalMl'
       };
   });
+  const streakStatus = await checkWaterStreakBadge(id);
 
-    res.status(200).json(waterData);
+  // Get all the patient's badges to include in the response
+  const patientBadges = await prisma.patientBadge.findMany({
+    where: { patientId: id },
+    include: {
+      badge: {
+        select: {
+          type: true,
+          title: true,
+          description: true,
+          createdAt: true,
+        }
+      }
+    }
+  });
+
+  res.status(200).json({
+    waterData,
+    badges: patientBadges,
+    streakStatus
+  });
   } catch (error) {
     console.error("Error fetching water status:", error);
     res.status(500).json({ message: "Internal Server Error", details: error.message });
   }
 };
 // Log Sleep Duration
+
+// Check and award Rested Diva badge for first time logging 8+ hours of sleep
+const checkAndAwardRestedDivaBadge = async (patientId, sleepStart, sleepEnd) => {
+  try {
+    // Calculate sleep duration in hours
+    let start = new Date(sleepStart);
+    let end = new Date(sleepEnd);
+    
+    // Adjust for overnight sleep
+    if (end <= start) {
+      end.setDate(end.getDate() + 1);
+    }
+    
+    const durationMs = end - start;
+    const durationHours = durationMs / (60 * 60 * 1000);
+    
+    // Only proceed if sleep duration is at least 8 hours
+    if (durationHours >= 8) {
+      console.log(`🛌 Sleep duration: ${durationHours.toFixed(2)} hours - Qualifies for Rested Diva badge!`);
+      
+      // Check if the badge exists in the database
+      let badge = await prisma.badge.findUnique({
+        where: { type: BadgeType.RESTED_DIVA },
+      });
+      
+      // If the badge doesn't exist, create it
+      if (!badge) {
+        badge = await prisma.badge.create({
+          data: {
+            type: BadgeType.RESTED_DIVA,
+            title: "Rested Diva",
+            description: "First time logging sleep (and getting minimum 8 hours of sleep)",
+          },
+        });
+        console.log("✨ Created Rested Diva badge:", badge);
+      }
+      
+      // Check if this patient already has the badge
+      const alreadyAwarded = await prisma.patientBadge.findUnique({
+        where: {
+          patientId_badgeId: {
+            patientId,
+            badgeId: badge.id,
+          },
+        },
+      });
+      
+      // If not already awarded, award the badge
+      if (!alreadyAwarded) {
+        const awarded = await prisma.patientBadge.create({
+          data: {
+            patientId,
+            badgeId: badge.id,
+          },
+        });
+        console.log("✅ Awarded Rested Diva badge:", awarded);
+        
+        return {
+          awarded: true,
+          badge: {
+            type: badge.type,
+            title: badge.title,
+            description: badge.description
+          }
+        };
+      } else {
+        console.log("ℹ️ Rested Diva badge already awarded earlier.");
+        return { awarded: false };
+      }
+    } else {
+      console.log(`🛌 Sleep duration: ${durationHours.toFixed(2)} hours - Does not qualify for Rested Diva badge`);
+      return { awarded: false, reason: "Sleep duration less than 8 hours" };
+    }
+  } catch (error) {
+    console.error("Error checking/awarding Rested Diva badge:", error);
+    return { awarded: false, error: error.message };
+  }
+};
+
+// Check and award Sleep Wizard badge for logging sleep daily for a week
+const checkAndAwardSleepWizardBadge = async (patientId) => {
+  try {
+    // Get the current date and set to midnight
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    
+    // Calculate 7 days ago
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(today.getDate() - 6);
+    
+    // Find all activities in the past 7 days with sleep logged
+    const activities = await prisma.patientActivity.findMany({
+      where: {
+        patientId: String(patientId),
+        date: {
+          gte: sevenDaysAgo,
+          lte: today,
+        },
+        sleepStart: { not: null },
+        sleepEnd: { not: null }
+      },
+      orderBy: { date: 'asc' },
+    });
+    
+    // Check if we have a perfect streak (7 days of sleep logging)
+    // First, create an array of dates we're looking for
+    const requiredDates = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(sevenDaysAgo);
+      date.setDate(sevenDaysAgo.getDate() + i);
+      requiredDates.push(date.toISOString().split('T')[0]);
+    }
+    
+    // Map activity dates to YYYY-MM-DD format
+    const activityDates = activities.map(activity => 
+      activity.date.toISOString().split('T')[0]
+    );
+    
+    // Check if all required dates have a sleep log
+    const hasCompleteStreak = requiredDates.every(date => 
+      activityDates.includes(date)
+    );
+    
+    if (hasCompleteStreak) {
+      console.log("🏅 7-day sleep streak detected, checking for Sleep Wizard badge...");
+      
+      // Check if the badge exists in the database
+      let badge = await prisma.badge.findUnique({
+        where: { type: BadgeType.SLEEP_WIZARD },
+      });
+      
+      // If the badge doesn't exist, create it
+      if (!badge) {
+        badge = await prisma.badge.create({
+          data: {
+            type: BadgeType.SLEEP_WIZARD,
+            title: "Sleep Wizard",
+            description: "Logged sleep daily for a week",
+          },
+        });
+        console.log("✨ Created Sleep Wizard badge:", badge);
+      }
+      
+      // Check if this patient already has the badge
+      const alreadyAwarded = await prisma.patientBadge.findUnique({
+        where: {
+          patientId_badgeId: {
+            patientId,
+            badgeId: badge.id,
+          },
+        },
+      });
+      
+      // If not already awarded, award the badge
+      if (!alreadyAwarded) {
+        const awarded = await prisma.patientBadge.create({
+          data: {
+            patientId,
+            badgeId: badge.id,
+          },
+        });
+        console.log("✅ Awarded Sleep Wizard badge:", awarded);
+        
+        return {
+          awarded: true,
+          badge: {
+            type: badge.type,
+            title: badge.title,
+            description: badge.description
+          }
+        };
+      } else {
+        console.log("ℹ️ Sleep Wizard badge already awarded earlier.");
+        return { awarded: false };
+      }
+    } else {
+      console.log("ℹ️ No complete 7-day sleep streak detected.");
+      return { awarded: false, reason: "No complete 7-day sleep streak" };
+    }
+  } catch (error) {
+    console.error("Error checking/awarding Sleep Wizard badge:", error);
+    return { awarded: false, error: error.message };
+  }
+};
+
 const logSleepDuration = async (req, res) => {
   console.log("hi")
     try {
@@ -314,6 +1030,29 @@ const logSleepDuration = async (req, res) => {
             return minutes > 0 ? `${hours} hr ${minutes} min` : `${hours} hr`;
         };
 
+        // Check for badges
+        // 1. Rested Diva badge (first time logging 8+ hours of sleep)
+        const restedDivaBadgeResult = await checkAndAwardRestedDivaBadge(id, sleepStartTime, sleepEndTime);
+        
+        // 2. Sleep Wizard badge (logged sleep daily for a week)
+        const sleepWizardBadgeResult = await checkAndAwardSleepWizardBadge(id);
+        
+        // Get all the patient's badges to include in the response
+        const patientBadges = await prisma.patientBadge.findMany({
+            where: { patientId: id },
+            include: {
+                badge: {
+                    select: {
+                        type: true,
+                        title: true,
+                        description: true,
+                        createdAt: true,
+                    }
+                }
+            }
+        });
+
+
         // Send response
         res.status(200).json({
             id: activity.id,
@@ -321,6 +1060,10 @@ const logSleepDuration = async (req, res) => {
             sleepStart: sleepStartTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }),
             sleepEnd: sleepEndTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true }),
             duration: calculateDuration(sleepStartTime, sleepEndTime),
+            newBadges: {
+              restedDiva: restedDivaBadgeResult && restedDivaBadgeResult.awarded ? restedDivaBadgeResult.badge : null,
+              sleepWizard: sleepWizardBadgeResult && sleepWizardBadgeResult.awarded ? sleepWizardBadgeResult.badge : null
+          }
         });
 
     } catch (error) {
@@ -396,7 +1139,29 @@ const getSleepStatus = async (req, res) => {
                 };
             });
 
-        res.status(200).json(sleepData);
+        // Check for Sleep Wizard badge (7-day streak)
+        const sleepWizardBadgeResult = await checkAndAwardSleepWizardBadge(id);
+        
+        // Get all the patient's badges to include in the response
+        const patientBadges = await prisma.patientBadge.findMany({
+            where: { patientId: id },
+            include: {
+                badge: {
+                    select: {
+                        type: true,
+                        title: true,
+                        description: true,
+                        createdAt: true,
+                    }
+                }
+            }
+        });
+
+        res.status(200).json({
+            sleepData,
+            badges: patientBadges,
+            newBadge: sleepWizardBadgeResult && sleepWizardBadgeResult.awarded ? sleepWizardBadgeResult.badge : null
+        });
     } catch (error) {
         console.error("Error fetching sleep status:", error);
         res.status(500).json({ message: "Error fetching sleep status", error: error.message || error });
@@ -610,6 +1375,112 @@ const StepsGoal = async (req, res) => {
   }
 };
 
+// Function to check and award "On the move!" badge for meeting step goals for a month
+const checkAndAwardOnTheMoveBadge = async (patientId) => {
+  try {
+    // Get the current date
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    
+    // Get the first day of the current month
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    
+    // Get the last day of the current month (set to the first day of next month and subtract 1 day)
+    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    
+    // Get the total number of days in the current month
+    const daysInMonth = lastDayOfMonth.getDate();
+    
+    // Find all activities in the current month where steps were logged
+    const activities = await prisma.patientActivity.findMany({
+      where: {
+        patientId: String(patientId),
+        date: {
+          gte: firstDayOfMonth,
+          lte: lastDayOfMonth,
+        },
+        steps: { not: null },
+        stepsGoal: { not: null },
+      },
+    });
+    
+    // Filter activities where the step goal was met
+    const activitiesWithMetGoals = activities.filter(activity => {
+      return activity.steps >= activity.stepsGoal && activity.stepsGoal > 0;
+    });
+    
+    console.log(`Found ${activitiesWithMetGoals.length} days with met step goals out of ${daysInMonth} days in the month`);
+    
+    // Check if goals were met for at least 25 days in the month
+    if (activitiesWithMetGoals.length >= 25) {
+      console.log("🏅 Step goals met for at least 25 days this month, checking for badge...");
+      
+      // Check if the badge exists in the database
+      let badge = await prisma.badge.findUnique({
+        where: { type: BadgeType.ON_THE_MOVE },
+      });
+      
+      // If the badge doesn't exist, create it
+      if (!badge) {
+        badge = await prisma.badge.create({
+          data: {
+            type: BadgeType.ON_THE_MOVE,
+            title: "On the move!",
+            description: "Step goals are met every day for a month (at least 25 days in a month)",
+          },
+        });
+        console.log("✨ Created On the move! badge:", badge);
+      }
+      
+      // Check if this patient already has the badge
+      const alreadyAwarded = await prisma.patientBadge.findUnique({
+        where: {
+          patientId_badgeId: {
+            patientId,
+            badgeId: badge.id,
+          },
+        },
+      });
+      
+      // If not already awarded, award the badge
+      if (!alreadyAwarded) {
+        const awarded = await prisma.patientBadge.create({
+          data: {
+            patientId,
+            badgeId: badge.id,
+          },
+        });
+        console.log("✅ Awarded On the move! badge:", awarded);
+        
+        return {
+          awarded: true,
+          badge: {
+            type: badge.type,
+            title: badge.title,
+            description: badge.description
+          }
+        };
+      } else {
+        console.log("ℹ️ On the move! badge already awarded earlier.");
+        return { awarded: false };
+      }
+    } else {
+      console.log(`ℹ️ Step goals only met for ${activitiesWithMetGoals.length} days, need at least 25 days.`);
+      return { 
+        awarded: false, 
+        reason: `Step goals only met for ${activitiesWithMetGoals.length} days, need at least 25 days.`,
+        progress: {
+          daysCompleted: activitiesWithMetGoals.length,
+          daysRequired: 25
+        }
+      };
+    }
+  } catch (error) {
+    console.error("Error checking/awarding On the move! badge:", error);
+    return { awarded: false, error: error.message };
+  }
+};
+
 const getStepsStatus = async (req, res) => {
   const { id } = req.params; // Patient ID
 
@@ -650,9 +1521,33 @@ const getStepsStatus = async (req, res) => {
           day: activity.date.toLocaleDateString("en-US", { weekday: "short" }), // Short weekday name
           steps: activity.steps || 0,
           stepsGoal: activity.stepsGoal || 0, // Assuming stepGoals is stored in the DB
+          goalMet: activity.steps >= activity.stepsGoal && activity.stepsGoal > 0
       }));
 
-      res.status(200).json(stepsData);
+      // Check for "On the move!" badge
+      const badgeResult = await checkAndAwardOnTheMoveBadge(id);
+
+       // Get all the patient's badges to include in the response
+       const patientBadges = await prisma.patientBadge.findMany({
+        where: { patientId: id },
+        include: {
+            badge: {
+                select: {
+                    type: true,
+                    title: true,
+                    description: true,
+                    createdAt: true,
+                }
+            }
+        }
+    });
+
+    res.status(200).json({
+        stepsData,
+        badges: patientBadges,
+        newBadge: badgeResult && badgeResult.awarded ? badgeResult.badge : null,
+        badgeProgress: badgeResult && !badgeResult.awarded && badgeResult.progress ? badgeResult.progress : null
+    });
   } catch (error) {
       console.error("Error fetching step status:", error);
       res.status(500).json({ message: "Error fetching step status", error: error.message });
@@ -1468,6 +2363,68 @@ export const upload = multer({
   }
 }).single('imageUrl');  
 
+// Function to check and award Snapshot badge for first photo upload
+const checkAndAwardSnapshotBadge = async (patientId) => {
+  try {
+    // Check if the SNAPSHOT badge type exists in the enum
+    // Make sure you've added this to your BadgeType enum in schema.prisma:
+    // SNAPSHOT // First time photo is uploaded
+    
+    // Check if the badge exists in the database
+    let badge = await prisma.badge.findUnique({
+      where: { type: BadgeType.SNAPSHOT },
+    });
+    
+    // If the badge doesn't exist, create it
+    if (!badge) {
+      badge = await prisma.badge.create({
+        data: {
+          type: BadgeType.SNAPSHOT,
+          title: "Snapshot",
+          description: "First time photo is uploaded",
+        },
+      });
+      console.log("✨ Created Snapshot badge:", badge);
+    }
+    
+    // Check if this patient already has the badge
+    const alreadyAwarded = await prisma.patientBadge.findUnique({
+      where: {
+        patientId_badgeId: {
+          patientId,
+          badgeId: badge.id,
+        },
+      },
+    });
+    
+    // If not already awarded, award the badge
+    if (!alreadyAwarded) {
+      const awarded = await prisma.patientBadge.create({
+        data: {
+          patientId,
+          badgeId: badge.id,
+        },
+      });
+      console.log("✅ Awarded Snapshot badge:", awarded);
+      
+      return {
+        awarded: true,
+        badge: {
+          type: badge.type,
+          title: badge.title,
+          description: badge.description
+        }
+      };
+    } else {
+      console.log("ℹ️ Snapshot badge already awarded earlier.");
+      return { awarded: false };
+    }
+  } catch (error) {
+    console.error("Error checking/awarding Snapshot badge:", error);
+    return { awarded: false, error: error.message };
+  }
+};
+
 // Add a journal entry with optional image
 const addJournalEntry = async (req, res) => {
   try {
@@ -1495,9 +2452,11 @@ const addJournalEntry = async (req, res) => {
         message: "Patient not found"
       });
     }
+    let uploadedPhoto = false;
 
     // Handle image upload if present
     if (req.file) {
+      uploadedPhoto = true;
       const fileExtension = req.file.originalname.split('.').pop();
       const fileName = `journal/${id}/${uuidv4()}.${fileExtension}`;
       
@@ -1591,16 +2550,56 @@ const addJournalEntry = async (req, res) => {
     // Format in ISO-like format but using local time values
     const localFormattedDate = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}`;
     
+    let badgeResult = null;
+    if (uploadedPhoto) {
+      // Check if this patient has any previous photos
+      const previousPhotos = await prisma.wombPicture.findMany({
+        where: {
+          patientActivityId: {
+            in: await prisma.patientActivity.findMany({
+              where: { patientId: id },
+              select: { id: true }
+            }).then(activities => activities.map(a => a.id))
+          },
+          id: { not: wombPicture.id }, // Exclude the one we just created
+          imageUrl: { not: null } // Only count entries with images
+        },
+        take: 1 // We only need to know if there's at least one
+      });
+      
+      // If this is the first photo, award the badge
+      if (previousPhotos.length === 0) {
+        console.log("🏅 First photo upload detected, awarding Snapshot badge...");
+        badgeResult = await checkAndAwardSnapshotBadge(id);
+      }
+    }
+    
+    // Get all the patient's badges to include in the response
+    const patientBadges = await prisma.patientBadge.findMany({
+      where: { patientId: id },
+      include: {
+        badge: {
+          select: {
+            type: true,
+            title: true,
+            description: true,
+            createdAt: true,
+          }
+        }
+      }
+    });
+    
     return res.status(201).json({
       success: true,
       message: "Journal entry created successfully",
       data: {
         id: wombPicture.id,
-        // patientActivityId: wombPicture.patientActivityId,
         title: wombPicture.title,
         imageUrl: wombPicture.imageUrl,
         createdAt: localFormattedDate,
-      }
+      },
+      badges: patientBadges,
+      newBadge: badgeResult && badgeResult.awarded ? badgeResult.badge : null
     });
   } catch (error) {
     console.error("Error creating journal entry:", error);

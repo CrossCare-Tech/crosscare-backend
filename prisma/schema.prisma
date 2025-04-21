@@ -22,6 +22,8 @@ model Patient {
   activities PatientActivity[]
   questionResponses  QuestionResponse[]
   questionnaires     Questionnaire[]
+  patientBadges PatientBadge[]
+  habitBadges   HabitBadge[]
 }
 
 model Doctor {
@@ -32,6 +34,69 @@ model Doctor {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @map("updated_at")
 }
+
+enum HabitType {
+  WATER
+  SLEEP
+  FOOD
+  STEPS
+}
+
+
+enum BadgeType {
+  HYDRATED_QUEEN
+  SNAPSHOT
+  HEART_SCRIBE
+  RESTED_DIVA
+  EXPLORER
+  MAMA_MILESTONE_I
+  MAMA_MILESTONE_II
+  MAMA_MILESTONE_III
+  MAMA_MILESTONE_IV
+  MAMA_MILESTONE_V
+  MAMA_MILESTONE_VI
+  WATER_WIZARD
+  SLEEP_WIZARD
+  HEALTH_QUEEN
+  ON_THE_MOVE
+  HOT_MAMA
+}
+
+model Badge {
+  id          String      @id @default(uuid())
+  type        BadgeType   @unique
+  title       String
+  description String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  awarded     PatientBadge[]
+}
+
+model PatientBadge {
+  id        String   @id @default(uuid())
+  patientId String
+  badgeId   String
+  awardedAt DateTime @default(now())
+
+  patient   Patient @relation(fields: [patientId], references: [id])
+  badge     Badge   @relation(fields: [badgeId], references: [id])
+
+  @@unique([patientId, badgeId])
+}
+
+model HabitBadge {
+  id         String     @id @default(uuid())
+  patientId  String
+  habit      HabitType
+  badgeType  BadgeType
+  awardedAt  DateTime   @default(now())
+
+  patient    Patient    @relation(fields: [patientId], references: [id])
+
+  @@unique([patientId, badgeType])
+}
+
+
 
 model PatientActivity {
   id          String       @id @default(uuid())
