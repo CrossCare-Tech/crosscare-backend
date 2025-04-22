@@ -125,8 +125,6 @@ const findOrCreateActivity = async (patientId) => {
               heart_rate: 0,
               weight: null,
               weight_unit: "kg",
-              notetaking: "",
-              wombPicture: "",
           },
       });
   }
@@ -1809,381 +1807,359 @@ const getWeightStatus = async (req, res) => {
 
 
 const createNote = async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { title, description } = req.body;
-  
-      if (!title || !description) {
-        return res.status(400).json({
-          success: false,
-          message: "Title and description are required"
-        });
-      }
-  
-      // Get current date and time
-      const now = new Date();
-      
-      // Get the time zone offset in minutes and convert to milliseconds
-      const timeZoneOffset = now.getTimezoneOffset() * 60000;
-      
-      // Adjust the date by adding the offset (subtract because getTimezoneOffset returns negative for east, positive for west)
-      const localTime = new Date(now.getTime() - timeZoneOffset);
-      
-      // Create ISO string from the adjusted time
-      const isoTime = localTime.toISOString();
-      
-      const patient = await prisma.patient.findUnique({
-        where: { id }
+  try {
+    const { id } = req.params;
+    const { title, description } = req.body;
+
+    if (!title || !description) {
+      return res.status(400).json({
+        success: false,
+        message: "Title and description are required"
       });
-  
-      if (!patient) {
-        return res.status(404).json({
-          success: false,
-          message: "Patient not found"
-        });
-      }
-  
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      let activity = await prisma.patientActivity.findFirst({
-        where: {
+    }
+
+    // Get current date and time
+    const now = new Date();
+    
+    const patient = await prisma.patient.findUnique({
+      where: { id }
+    });
+
+    if (!patient) {
+      return res.status(404).json({
+        success: false,
+        message: "Patient not found"
+      });
+    }
+
+    // Get start of today for date query
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    
+    // Find or create an activity for today
+    let activity = await prisma.patientActivity.findFirst({
+      where: {
+        patientId: id,
+        date: {
+          gte: today,
+          lt: tomorrow,
+        },
+      },
+    });
+    
+    // If no activity exists for today, create one
+    if (!activity) {
+      activity = await prisma.patientActivity.create({
+        data: {
           patientId: id,
-          date: {
-            gte: today,
-            lt: new Date(today.getTime()),
+          date: now,
+        },
+      });
+    }
+    
+    // Now create the note with correct fields from your schema
+    const note = await prisma.noteTaking.create({
+      data: {
+        patientActivityId: activity.id,
+        title,
+        description,
+        // createdAt and updatedAt are handled automatically by Prisma
+      }
+    });
+
+    const notesCount = await prisma.noteTaking.count({
+      where: {
+        patientActivity: {
+          patientId: id
+        }
+      }
+    });
+    
+    // Initialize badge variable
+    let heartScribeBadge = null;
+    
+    // Award HEART_SCRIBE badge if this is the first note
+    if (notesCount === 1) {
+      console.log("🏅 First journal entry detected, attempting badge award...");
+      
+      let badge = await prisma.badge.findUnique({
+        where: { type: BadgeType.HEART_SCRIBE },
+      });
+      
+      if (!badge) {
+        badge = await prisma.badge.create({
+          data: {
+            type: BadgeType.HEART_SCRIBE,
+            title: "Heart Scribe",
+            description: "First time Logging an entry in the journal",
+          },
+        });
+        console.log("✨ Created badge:", badge);
+      }
+      
+      const alreadyAwarded = await prisma.patientBadge.findUnique({
+        where: {
+          patientId_badgeId: {
+            patientId: id,
+            badgeId: badge.id,
           },
         },
       });
       
-      // Store time data in the note
-      const noteData = {
+      if (!alreadyAwarded) {
+        const awarded = await prisma.patientBadge.create({
+          data: {
+            patientId: id,
+            badgeId: badge.id,
+          },
+        });
+        console.log("✅ Awarded badge:", awarded);
+        heartScribeBadge = awarded;
+      } else {
+        console.log("ℹ️ Badge already awarded earlier.");
+      }
+    }
+    
+    // Format the date for display in local time
+    const formattedDate = note.createdAt.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: true
+    });
+    
+    return res.status(201).json({
+      success: true,
+      message: "Note created successfully",
+      data: {
+        id: note.id,
+        patientId: id,
+        title: note.title,
+        description: note.description,
+        createdAt: note.createdAt,
+        formattedDate
+      },
+      badge: heartScribeBadge
+    });
+  } catch (error) {
+    console.error("Error creating note:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to create note",
+      error: error.message
+    });
+  }
+};
+
+const formatDateTime = (date) => {
+  return date.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: true
+  });
+};
+
+const editNote = async (req, res) => {
+  try {
+    const { id, noteId } = req.params; // Patient ID and Note ID
+    const { title, description } = req.body;
+
+    // Check if patient exists
+    const patient = await prisma.patient.findUnique({
+      where: { id }
+    });
+
+    if (!patient) {
+      return res.status(404).json({
+        success: false,
+        message: "Patient not found"
+      });
+    }
+
+    // Find the note using the NoteTaking model
+    const note = await prisma.noteTaking.findUnique({
+      where: { id: noteId },
+      include: { patientActivity: true }
+    });
+
+    if (!note) {
+      return res.status(404).json({
+        success: false,
+        message: "Note not found"
+      });
+    }
+
+    // Check if this note belongs to the patient
+    if (note.patientActivity.patientId !== id) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to edit this note"
+      });
+    }
+
+    // Update the note using the NoteTaking model
+    const updatedNote = await prisma.noteTaking.update({
+      where: { id: noteId },
+      data: {
         title,
-        description,
-        createdAt: isoTime,
+        description
+        // updatedAt will be automatically updated by Prisma
+      }
+    });
+
+    // Format the date for display
+    const formattedDate = formatDateTime(updatedNote.updatedAt);
+
+    return res.status(200).json({
+      success: true,
+      message: "Note updated successfully",
+      data: {
+        id: updatedNote.id,
+        patientId: id,
+        title: updatedNote.title,
+        description: updatedNote.description,
+        createdAt: updatedNote.createdAt,
+        updatedAt: updatedNote.updatedAt,
+        formattedDate
+      }
+    });
+  } catch (error) {
+    console.error("Error updating note:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update note",
+      error: error.message
+    });
+  }
+};
+
+const getUserNotes = async (req, res) => {
+  try {
+    const { id } = req.params; // patientId from URL
+    
+    // Check if patient exists
+    const patient = await prisma.patient.findUnique({
+      where: { id }
+    });
+    
+    if (!patient) {
+      return res.status(404).json({
+        success: false,
+        message: "Patient not found"
+      });
+    }
+    
+    // Get all notes for this patient using the NoteTaking model
+    const notes = await prisma.noteTaking.findMany({
+      where: {
+        patientActivity: {
+          patientId: id
+        }
+      },
+      include: {
+        patientActivity: true
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+    
+    // Get current date and time
+    const now = new Date();
+    
+    // Get current date at the start of the day for categorization
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    // Calculate date for 7 days ago
+    const lastWeekStart = new Date(today);
+    lastWeekStart.setDate(today.getDate() - 7);
+    
+    // Initialize section arrays
+    const todayItems = [];
+    const lastWeekItems = [];
+    const previouslyItems = [];
+    
+    // Sort notes into categories
+    notes.forEach(note => {
+      const noteDate = note.createdAt;
+      const formattedDate = formatDateTime(noteDate);
+      
+      // Format the description to truncate it with ellipsis if too long
+      let shortDescription = note.description || "";
+      if (shortDescription.length > 30) {
+        shortDescription = shortDescription.substring(0, 30) + ' ...';
+      }
+      
+      // Create the item object with formatted time
+      const item = {
+        id: note.id,
+        title: note.title || "Untitled",
+        description: shortDescription,
+        date: formattedDate // Use formatted date
       };
       
-      // Create new activity
-      activity = await prisma.patientActivity.create({
-        data: {
-          patientId: id,
-          date: now, // This will be stored in UTC in the database
-          notetaking: JSON.stringify(noteData),
-        },
-      });
-      
-      // Format the date for display in local time
-      const formattedDate = now.toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: 'numeric',
-        hour12: true
-      });
-      
-      return res.status(201).json({
-        success: true,
-        message: "Note created successfully",
-        data: {
-          id: activity.id,
-          patientId: activity.patientId,
-          date: isoTime, // Return the ISO time with local time zone adjustment
-          title: noteData.title,
-          description: noteData.description,
-          createdAt: noteData.createdAt,
-        }
-      });
-    } catch (error) {
-      console.error("Error creating note:", error);
-      return res.status(500).json({
-        success: false,
-        message: "Failed to create note",
-        error: error.message
+      // Check if note was created today
+      if (noteDate >= today) {
+        todayItems.push(item);
+      } 
+      // Check if note was created in the last week
+      else if (noteDate >= lastWeekStart) {
+        lastWeekItems.push(item);
+      } 
+      // Everything else is categorized as previously
+      else {
+        previouslyItems.push(item);
+      }
+    });
+    
+    // Build content sections array in the exact format requested
+    const contentSections = [];
+    
+    // Add Today section if there are notes
+    if (todayItems.length > 0) {
+      contentSections.push({
+        title: "Today",
+        items: todayItems
       });
     }
-  };
-
-  const editNote = async (req, res) => {
-    try {
-      const { id, noteId } = req.params; // Patient ID and Note ID
-      const { title, description } = req.body;
-  
-      // Check if patient exists
-      const patient = await prisma.patient.findUnique({
-        where: { id }
-      });
-  
-      if (!patient) {
-        return res.status(404).json({
-          success: false,
-          message: "Patient not found"
-        });
-      }
-  
-      // Find the activity with the specific note ID
-      const activity = await prisma.patientActivity.findUnique({
-        where: { id: noteId }
-      });
-  
-      if (!activity) {
-        return res.status(404).json({
-          success: false,
-          message: "Note not found"
-        });
-      }
-  
-      // Check if this activity belongs to the patient
-      if (activity.patientId !== id) {
-        return res.status(403).json({
-          success: false,
-          message: "You do not have permission to edit this note"
-        });
-      }
-  
-      // Parse the existing note data
-      let noteData;
-      try {
-        noteData = JSON.parse(activity.notetaking || "{}");
-      } catch (e) {
-        noteData = { title: "Untitled", description: "" };
-      }
-  
-      // Get current time for the update timestamp
-      const now = new Date();
-      const timeZoneOffset = now.getTimezoneOffset() * 60000;
-      const localTime = new Date(now.getTime() - timeZoneOffset);
-      const isoTime = localTime.toISOString();
-  
-      // Update the note data
-      const updatedNoteData = {
-        ...noteData,
-        title,
-        description,
-        updatedAt: isoTime, // Add a timestamp for the update
-      };
-  
-      // Update the activity record
-      const updatedActivity = await prisma.patientActivity.update({
-        where: { id: noteId },
-        data: {
-          notetaking: JSON.stringify(updatedNoteData)
-        }
-      });
-  
-      // Format the date for display in local time
-      const formattedDate = localTime.toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: 'numeric',
-        hour12: true
-      });
-  
-      return res.status(200).json({
-        success: true,
-        message: "Note updated successfully",
-        data: {
-          id: updatedActivity.id,
-          patientId: updatedActivity.patientId,
-          date: isoTime,
-          title: updatedNoteData.title,
-          description: updatedNoteData.description,
-          createdAt: noteData.createdAt || isoTime,
-          updatedAt: updatedNoteData.updatedAt
-        }
-      });
-    } catch (error) {
-      console.error("Error updating note:", error);
-      return res.status(500).json({
-        success: false,
-        message: "Failed to update note",
-        error: error.message
+    
+    // Add Last Week section if there are notes
+    if (lastWeekItems.length > 0) {
+      contentSections.push({
+        title: "Last Week",
+        items: lastWeekItems
       });
     }
-  };
-
-  const getUserNotes = async (req, res) => {
-    try {
-      const { id } = req.params; // patientId from URL
-      
-      // Check if patient exists
-      const patient = await prisma.patient.findUnique({
-        where: { id }
-      });
-      
-      if (!patient) {
-        return res.status(404).json({
-          success: false,
-          message: "Patient not found"
-        });
-      }
-      
-      // Get all activities with notes
-      const activities = await prisma.patientActivity.findMany({
-        where: {
-          patientId: id,
-          notetaking: { not: null }
-        },
-        orderBy: {
-          date: 'desc'
-        }
-      });
-      
-      // Get current date and time
-      const now = new Date();
-      
-      
-      // Get the time zone offset in minutes and convert to milliseconds
-      const timeZoneOffset = now.getTimezoneOffset() * 60000;
-      
-      // Adjust the date by adding the offset (subtract because getTimezoneOffset returns negative for east, positive for west)
-      const localTime = new Date(now.getTime() - timeZoneOffset);
-      
-      // Create ISO string from the adjusted time
-      const isoTime = localTime.toISOString();
-      
-      // Parse notes from activities
-      const allNotes = activities.map(activity => {
-        try {
-          const noteData = JSON.parse(activity.notetaking);
-          let createdAt;
-          
-          // Use the stored createdAt time which has local time zone adjustment
-          if (noteData.createdAt) {
-            createdAt = new Date(noteData.createdAt);
-          } else {
-            // For older notes that don't have adjusted createdAt
-            createdAt = new Date(activity.date);
-          }
-          
-          // Format the date for display
-          const formattedDate = createdAt.toLocaleString('en-US', {
-            year: 'numeric',
-            month: 'numeric',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: 'numeric',
-            hour12: true
-          });
-          
-          return {
-            id: activity.id,
-            patientId: activity.patientId,
-            date: activity.date,
-            title: noteData.title || "Untitled",
-            description: noteData.description || "",
-            createdAt: createdAt,
-            formattedDate: formattedDate,
-          };
-        } catch (e) {
-          // Handle case where notetaking isn't valid JSON
-          const createdAt = new Date(activity.date);
-          const formattedDate = createdAt.toLocaleString('en-US', {
-            year: 'numeric',
-            month: 'numeric',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: 'numeric',
-            hour12: true
-          });
-          
-          return {
-            id: activity.id,
-            patientId: activity.patientId,
-            date: activity.date,
-            title: "Untitled Note",
-            description: activity.notetaking || "",
-            createdAt: createdAt,
-            formattedDate: formattedDate
-          };
-        }
-      });
-      
-      // Get current date at the start of the day for categorization
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      
-      // Calculate date for 7 days ago
-      const lastWeekStart = new Date(today);
-      lastWeekStart.setDate(today.getDate() - 7);
-      
-      // Initialize section arrays
-      const todayItems = [];
-      const lastWeekItems = [];
-      const previouslyItems = [];
-      
-      // Sort notes into categories
-      allNotes.forEach(note => {
-        const noteDate = note.createdAt;
-        
-        // Format the description to truncate it with ellipsis if too long
-        if (note.description && note.description.length > 30) {
-          note.description = note.description.substring(0, 30) + ' ...';
-        }
-        
-        // Create the item object with formatted time
-        const item = {
-          id: note.id,
-          title: note.title,
-          description: note.description,
-          date: note.formattedDate // Use formatted date that respects time zone
-        };
-        
-        // Check if note was created today
-        if (noteDate >= today) {
-          todayItems.push(item);
-        } 
-        // Check if note was created in the last week
-        else if (noteDate >= lastWeekStart) {
-          lastWeekItems.push(item);
-        } 
-        // Everything else is categorized as previously
-        else {
-          previouslyItems.push(item);
-        }
-      });
-      
-      // Build content sections array in the exact format requested
-      const contentSections = [];
-      
-      // Add Today section if there are notes
-      if (todayItems.length > 0) {
-        contentSections.push({
-          title: "Today",
-          items: todayItems
-        });
-      }
-      
-      // Add Last Week section if there are notes
-      if (lastWeekItems.length > 0) {
-        contentSections.push({
-          title: "Last Week",
-          items: lastWeekItems
-        });
-      }
-      
-      // Add Previously section if there are notes
-      if (previouslyItems.length > 0) {
-        contentSections.push({
-          title: "Previously",
-          items: previouslyItems
-        });
-      }
-      
-      // Return the content sections with today's date and time
-      return res.status(200).json({
-        success: true,
-        data: contentSections,
-        currentTime: isoTime,
-      });
-    } catch (error) {
-      console.error("Error fetching notes:", error);
-      return res.status(500).json({
-        success: false,
-        message: "Failed to fetch notes",
-        error: error.message
+    
+    // Add Previously section if there are notes
+    if (previouslyItems.length > 0) {
+      contentSections.push({
+        title: "Previously",
+        items: previouslyItems
       });
     }
-  };
+    
+    // Return the content sections with current time
+    return res.status(200).json({
+      success: true,
+      data: contentSections,
+      currentTime: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error fetching notes:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch notes",
+      error: error.message
+    });
+  }
+};
 
   const addMedication = async (req, res) => {
     try {

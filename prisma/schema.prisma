@@ -152,6 +152,7 @@ model PatientActivity {
   stepsGoal   Int?
   meal        Meals[]
   medications Medication[]
+  noteTaking  NoteTaking[]
   wombPictures WombPicture[] // New relation
   patient     Patient      @relation(fields: [patientId], references: [id])
 }
@@ -166,6 +167,15 @@ model WombPicture {
   patientActivity   PatientActivity @relation(fields: [patientActivityId], references: [id])
 }
 
+model NoteTaking{
+  id                String          @id @default(uuid())
+  patientActivityId String
+  title             String
+  description       String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  patientActivity   PatientActivity @relation(fields: [patientActivityId], references: [id])
+}
 
 model Meals {
   mealId            String          @id @default(uuid())
