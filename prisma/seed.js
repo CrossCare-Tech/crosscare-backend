@@ -452,6 +452,7 @@ async function main() {
 
 
 
+  // Create domains and their questions
   for (const domain of QUESTIONNAIRE_DOMAINS) {
     const { questions, ...domainData } = domain;
     
@@ -463,54 +464,29 @@ async function main() {
       
       if (existingDomain) {
         console.log(`Domain ${domainData.title} already exists, skipping creation`);
-      } else {
-        // Create domain if it doesn't exist
-        // Find the questionnaire we just created to link the domain to it
-        const questionnaire = await prisma.questionnaire.findFirst({
-          where: { patientId: patient.id },
-          orderBy: { createdAt: 'desc' }
-        });
-        
-        if (!questionnaire) {
-          console.log(`Cannot find questionnaire for patient, skipping domain creation`);
-          continue;
-        }
-        
-        // Try to create the domain with questionnaire link
+        continue;
+      }
+      
+      // Create domain data object - just use the domain data directly
+      // Don't try to reference questionnaire which might not exist
+      const createdDomain = await prisma.questionnaireDomain.create({
+        data: domainData,
+      });
+      
+      console.log(`Created domain: ${createdDomain.title}`);
+      
+      // Create questions for this domain
+      for (const question of questions) {
         try {
-          const createdDomain = await prisma.questionnaireDomain.create({
+          const createdQuestion = await prisma.question.create({
             data: {
-              ...domainData,
-              questionnaireId: questionnaire.id
+              ...question,
+              domainId: createdDomain.id,
             },
           });
-          console.log(`Created domain: ${createdDomain.title}`);
+          console.log(`Created question: ${createdQuestion.text.substring(0, 30)}...`);
         } catch (error) {
-          // If the error is about unknown field, try without questionnaireId
-          if (error.message.includes('Unknown arg `questionnaireId`')) {
-            const createdDomain = await prisma.questionnaireDomain.create({
-              data: domainData,
-            });
-            console.log(`Created domain: ${createdDomain.title}`);
-          } else {
-            throw error;
-          }
-        }
-        console.log(`Created domain: ${createdDomain.title}`);
-        
-        // Create questions for this domain
-        for (const question of questions) {
-          try {
-            const createdQuestion = await prisma.question.create({
-              data: {
-                ...question,
-                domainId: createdDomain.id,
-              },
-            });
-            console.log(`Created question: ${createdQuestion.text}`);
-          } catch (error) {
-            console.log(`Skipping question ${question.questionId}: ${error.message}`);
-          }
+          console.log(`Error creating question ${question.questionId}: ${error.message}`);
         }
       }
     } catch (error) {
@@ -518,13 +494,13 @@ async function main() {
     }
   }
 
+
   console.log(`\nSeeding completed successfully!`);
 }
 
 
 
   // Create domains and their questions
-  
 
 main()
   .catch((e) => {

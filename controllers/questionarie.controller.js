@@ -6,71 +6,75 @@ const submitResponse = async (req, res) => {
   console.log("Patient ID:", patientId); // Log the patient ID for debugging
 
   try {
+    // First, find the questionnaire associated with the patient
+    const questionnaire = await prisma.questionnaire.findFirst({
+      where: { patientId: patientId }
+    });
+    
+    console.log("Found questionnaire:", questionnaire?.id || "None");
+
     // Check if request body is an array
     if (Array.isArray(req.body)) {
       const results = [];
-
+      
+      // Verify patient exists (only check once outside the loop for efficiency)
+      const patientExists = await prisma.patient.findUnique({
+        where: { id: patientId }
+      });
+      
+      if (!patientExists) {
+        return res.status(404).json({
+          success: false,
+          error: `Patient with ID ${patientId} not found`
+        });
+      }
+      
       // Process each item in the array
       for (const item of req.body) {
         const { domainId, questionId, response, flag, timestamp = new Date() } = item;
-
+        
         // Validate each item
         if (!domainId || !questionId || response === undefined) {
           return res.status(400).json({
             success: false,
-            error: 'Each item must have domainId, questionId, and response',
+            error: 'Each item must have domainId, questionId, and response'
           });
         }
-
-        // Verify patient exists (only check once outside the loop for efficiency)
-        const patientExists = await prisma.patient.findUnique({
-          where: { id: patientId },
-        });
-
-        if (!patientExists) {
-          return res.status(404).json({
-            success: false,
-            error: `Patient with ID ${patientId} not found`,
-          });
-        }
-
-        // Log the received question data to debug
-        console.log("Looking for question with domainId:", domainId, "and questionId:", questionId);
-
-        // Find the question from the database with a more accurate query
+        
+        // Find the question from the database
         const question = await prisma.question.findFirst({
-          where: {
-            questionId: questionId, // Ensure questionId is exactly correct
-            domainId: domainId,      // Ensure domainId is exactly correct
-          },
+          where: { 
+            questionId: questionId,
+            domainId: domainId
+          }
         });
-
+        
         if (!question) {
-          console.error(`Question not found: ${questionId} in domain ${domainId}`);
           return res.status(404).json({
             success: false,
-            error: `Question with ID ${questionId} in domain ${domainId} not found`,
+            error: `Question with ID ${questionId} in domain ${domainId} not found`
           });
         }
-
+        
         // Check if the patient already responded to this question
         const existingResponse = await prisma.questionResponse.findFirst({
-          where: {
-            patientId,
-            questionId: question.id,
-          },
+          where: { 
+            patientId, 
+            questionId: question.id 
+          }
         });
-
+        
         let savedResponse;
         if (existingResponse) {
           // Update the existing response
           savedResponse = await prisma.questionResponse.update({
             where: { id: existingResponse.id },
             data: {
-              response, // Update the response
-              flag,     // Update the flag
-              timestamp: new Date(timestamp), // Update the timestamp in UTC
-            },
+              response,  // Update the response
+              flag,      // Update the flag
+              timestamp: new Date(timestamp),  // Update the timestamp in UTC
+              questionnaireId: questionnaire?.id || null  // Update the questionnaire ID
+            }
           });
         } else {
           // Create a new response
@@ -81,71 +85,68 @@ const submitResponse = async (req, res) => {
               domainId,
               response,
               flag,
-              timestamp: new Date(timestamp), // Set timestamp to UTC
-            },
+              timestamp: new Date(timestamp),  // Set timestamp to UTC
+              questionnaireId: questionnaire?.id || null  // Set the questionnaire ID
+            }
           });
         }
-
+        
         // Add result to results array
         results.push(savedResponse);
       }
-
+      
       return res.status(200).json({
         success: true,
         message: 'All responses processed successfully',
-        data: results,
+        data: results
       });
     } else {
       // Handle single object
       const { domainId, questionId, response, flag, timestamp = new Date() } = req.body;
-
+      
       // Validate required fields
       if (!domainId || !questionId || response === undefined) {
         return res.status(400).json({
           success: false,
-          error: 'Missing required fields: domainId, questionId, and response are required',
+          error: 'Missing required fields: domainId, questionId, and response are required'
         });
       }
-
+      
       // Verify patient exists
       const patientExists = await prisma.patient.findUnique({
-        where: { id: patientId },
+        where: { id: patientId }
       });
-
+      
       if (!patientExists) {
         return res.status(404).json({
           success: false,
-          error: `Patient with ID ${patientId} not found`,
+          error: `Patient with ID ${patientId} not found`
         });
       }
-
-      // Log the received question data to debug
-      console.log("Looking for question with domainId:", domainId, "and questionId:", questionId);
-
-      // Find the question from the database with a more accurate query
+      
+      // Find the question from the database
       const question = await prisma.question.findFirst({
-        where: {
-          questionId: questionId, // Ensure questionId is exactly correct
-          domainId: domainId,      // Ensure domainId is exactly correct
-        },
+        where: { 
+          questionId: questionId,
+          domainId: domainId
+        }
       });
-
+      
       if (!question) {
-        console.error(`Question not found: ${questionId} in domain ${domainId}`);
         return res.status(404).json({
           success: false,
-          error: `Question with ID ${questionId} in domain ${domainId} not found`,
+          error: `Question with ID ${questionId} in domain ${domainId} not found`
         });
       }
-
+      
       // Check if the patient already responded to this question
       const existingResponse = await prisma.questionResponse.findFirst({
-        where: {
-          patientId,
-          questionId: question.id,
-        },
+        where: { 
+          patientId, 
+          questionId: question.id 
+        }
       });
-
+      
       let savedResponse;
       if (existingResponse) {
         // Update the existing response
@@ -155,7 +156,8 @@ const submitResponse = async (req, res) => {
             response,  // Update the response
             flag,      // Update the flag
             timestamp: new Date(timestamp),  // Update the timestamp in UTC
-          },
+            questionnaireId: questionnaire?.id || null  // Update the questionnaire ID
+          }
         });
       } else {
         // Create a new response
@@ -167,10 +169,11 @@ const submitResponse = async (req, res) => {
             response,
             flag,
             timestamp: new Date(timestamp),  // Set timestamp to UTC
-          },
+            questionnaireId: questionnaire?.id || null  // Set the questionnaire ID
+          }
         });
       }
-
+      
       return res.status(existingResponse ? 200 : 201).json({
         success: true,
         message: existingResponse ? 'Response updated successfully' : 'Response saved successfully',
@@ -181,12 +184,10 @@ const submitResponse = async (req, res) => {
     console.error('Error saving questionnaire response:', error);
     return res.status(500).json({
       success: false,
-      error: error.message || 'An error occurred while saving the response',
+      error: error.message || 'An error occurred while saving the response'
     });
   }
 };
-
-  
   const getAnsweredQuestions = async (req, res) => {
     const { patientId } = req.params;
     try {
