@@ -79,7 +79,12 @@ const getUserActivities = async (req, res) => {
               healthQueenBadgeResult.progress : null
       };
 
-      res.status(200).json(Object.values(mergedActivities));
+      res.status(200).json({
+          activities: Object.values(mergedActivities),
+          badges: patientBadges,
+          newBadge,
+          badgeProgress
+      });
 
   } catch (error) {
       console.error("Error fetching activities:", error);
