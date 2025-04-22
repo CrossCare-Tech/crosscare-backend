@@ -122,6 +122,7 @@ const awardMilestoneBadge = async (req, res) => {
       description
     });
     
+    // Validate required fields
     if (!patientId || !badgeType) {
       return res.status(400).json({ 
         success: false, 
@@ -196,9 +197,10 @@ const awardMilestoneBadge = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to award badge",
-      error: error.message
+      error: error.message || error
     });
   }
 };
+
 
 export default { awardHabitBadge, getHabitBadges, getPatientBadges, awardPatientBadge, awardMilestoneBadge }
