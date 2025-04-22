@@ -141,139 +141,136 @@ const checkAndAwardHealthQueenBadge = async (patientId) => {
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
     
-    // Get the first day of the current month
-    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    // Calculate 63 days ago (9 weeks) to check for cumulative streaks
+    const sixtyThreeDaysAgo = new Date(today);
+    sixtyThreeDaysAgo.setDate(today.getDate() - 62);
     
-    // Get the last day of the current month
-    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    
-    // Find all activities in the current month
+    // Find all activities in the past 9 weeks
     const activities = await prisma.patientActivity.findMany({
       where: {
         patientId: String(patientId),
         date: {
-          gte: firstDayOfMonth,
-          lte: lastDayOfMonth,
+          gte: sixtyThreeDaysAgo,
+          lte: today,
         },
       },
     });
     
-    // Group activities by date to ensure we count unique days
-    const activitiesByDate = {};
-    activities.forEach(activity => {
-      const dateString = activity.date.toISOString().split('T')[0];
-      if (!activitiesByDate[dateString]) {
-        activitiesByDate[dateString] = activity;
-      }
-    });
+    // Health Queen badge progression
+    const healthQueenBadges = [
+      { type: BadgeType.HEALTH_QUEEN_I, weeksRequired: 1, title: "Health Queen I", description: "Completed first week of logging all habits" },
+      { type: BadgeType.HEALTH_QUEEN_II, weeksRequired: 2, title: "Health Queen II", description: "Completed two consecutive weeks of logging all habits" },
+      { type: BadgeType.HEALTH_QUEEN_III, weeksRequired: 3, title: "Health Queen III", description: "Completed three consecutive weeks of logging all habits" },
+      { type: BadgeType.HEALTH_QUEEN_IV, weeksRequired: 4, title: "Health Queen IV", description: "Completed four consecutive weeks of logging all habits" },
+      { type: BadgeType.HEALTH_QUEEN_V, weeksRequired: 5, title: "Health Queen V", description: "Completed five consecutive weeks of logging all habits" },
+      { type: BadgeType.HEALTH_QUEEN_VI, weeksRequired: 6, title: "Health Queen VI", description: "Completed six consecutive weeks of logging all habits" },
+      { type: BadgeType.HEALTH_QUEEN_VII, weeksRequired: 7, title: "Health Queen VII", description: "Completed seven consecutive weeks of logging all habits" },
+      { type: BadgeType.HEALTH_QUEEN_VIII, weeksRequired: 8, title: "Health Queen VIII", description: "Completed eight consecutive weeks of logging all habits" },
+      { type: BadgeType.HEALTH_QUEEN_IX, weeksRequired: 9, title: "Health Queen IX", description: "Completed nine consecutive weeks of logging all habits" }
+    ];
     
-    // Count days where all habits are logged
-    let daysWithAllHabits = 0;
-    
-    // Get the total number of days in the month
-    const daysInMonth = lastDayOfMonth.getDate();
-    
-    // Track which dates have all habits logged
-    const datesWithAllHabits = [];
-    
-    // Check each day in the month
-    for (let i = 1; i <= daysInMonth; i++) {
-      const currentDate = new Date(today.getFullYear(), today.getMonth(), i);
-      const dateString = currentDate.toISOString().split('T')[0];
-      
-      const activity = activitiesByDate[dateString];
-      
-      if (activity) {
-        // Check if water was logged
+    // Function to check consecutive weeks of habit logging
+    const checkConsecutiveWeeks = (activities) => {
+      // Group activities by week
+      const weekGroups = {};
+      activities.forEach(activity => {
+        const activityDate = new Date(activity.date);
+        const weekStart = new Date(activityDate);
+        weekStart.setDate(activityDate.getDate() - activityDate.getDay());
+        const weekKey = weekStart.toISOString().split('T')[0];
+        
+        if (!weekGroups[weekKey]) {
+          weekGroups[weekKey] = {
+            completeDays: new Set(),
+            hasAllHabits: false
+          };
+        }
+        
+        // Check if all habits are logged for this day
         const hasWater = activity.water !== null && activity.water > 0;
-        
-        // Check if sleep was logged
         const hasSleep = activity.sleepStart !== null && activity.sleepEnd !== null;
-        
-        // Check if a meal/food was logged (through a meal log or nutrition entry)
-        // This will need to be adapted based on how you track food - for example, through wombPictures with food tags
-        // For now, we'll assume there's a separate system for tracking meals
-        
-        // For demonstration, we'll check if there's any meal-related data
-        // You'll need to customize this based on your actual data structure
         const hasFood = true; // Replace with actual food logging check
         
-        // If all three habits were logged on this day
         if (hasWater && hasSleep && hasFood) {
-          daysWithAllHabits++;
-          datesWithAllHabits.push(dateString);
+          weekGroups[weekKey].completeDays.add(activityDate.toISOString().split('T')[0]);
+        }
+      });
+      
+      // Check for consecutive complete weeks (7 days logged)
+      const consecutiveWeeks = Object.values(weekGroups)
+        .filter(week => week.completeDays.size === 7)
+        .length;
+      
+      return consecutiveWeeks;
+    };
+    
+    // Calculate consecutive complete weeks
+    const consecutiveWeeks = checkConsecutiveWeeks(activities);
+    
+    // Find the highest badge to award based on consecutive weeks
+    let badgeToAward = null;
+    for (const badgeLevel of healthQueenBadges) {
+      if (consecutiveWeeks >= badgeLevel.weeksRequired) {
+        // Check if the badge exists in the database
+        let badge = await prisma.badge.findUnique({
+          where: { type: badgeLevel.type },
+        });
+        
+        // If the badge doesn't exist, create it
+        if (!badge) {
+          badge = await prisma.badge.create({
+            data: {
+              type: badgeLevel.type,
+              title: badgeLevel.title,
+              description: badgeLevel.description,
+            },
+          });
+          console.log(`✨ Created ${badge.title} badge:`, badge);
+        }
+        
+        // Check if this patient already has the badge
+        const alreadyAwarded = await prisma.patientBadge.findUnique({
+          where: {
+            patientId_badgeId: {
+              patientId,
+              badgeId: badge.id,
+            },
+          },
+        });
+        
+        // If not already awarded, set as badge to award
+        if (!alreadyAwarded) {
+          badgeToAward = badge;
         }
       }
     }
     
-    console.log(`Found ${daysWithAllHabits} days with all habits logged out of ${daysInMonth} days in the month`);
-    
-    // Calculate the percentage of days with all habits logged
-    const percentageComplete = Math.round((daysWithAllHabits / daysInMonth) * 100);
-    
-    // Check if all habits were logged every day of the month
-    // You can adjust the threshold as needed (e.g., 90% of days or 27 out of 30 days)
-    if (daysWithAllHabits >= daysInMonth) {
-      console.log("🏅 All habits logged daily for the entire month, checking for Health Queen badge...");
-      
-      // Check if the badge exists in the database
-      let badge = await prisma.badge.findUnique({
-        where: { type: BadgeType.HEALTH_QUEEN },
-      });
-      
-      // If the badge doesn't exist, create it
-      if (!badge) {
-        badge = await prisma.badge.create({
-          data: {
-            type: BadgeType.HEALTH_QUEEN,
-            title: "Health Queen",
-            description: "Logged all habits daily for a month (food, water, sleep)",
-          },
-        });
-        console.log("✨ Created Health Queen badge:", badge);
-      }
-      
-      // Check if this patient already has the badge
-      const alreadyAwarded = await prisma.patientBadge.findUnique({
-        where: {
-          patientId_badgeId: {
-            patientId,
-            badgeId: badge.id,
-          },
+    // Award the badge if found
+    if (badgeToAward) {
+      const awarded = await prisma.patientBadge.create({
+        data: {
+          patientId,
+          badgeId: badgeToAward.id,
         },
       });
+      console.log("✅ Awarded Health Queen badge:", awarded);
       
-      // If not already awarded, award the badge
-      if (!alreadyAwarded) {
-        const awarded = await prisma.patientBadge.create({
-          data: {
-            patientId,
-            badgeId: badge.id,
-          },
-        });
-        console.log("✅ Awarded Health Queen badge:", awarded);
-        
-        return {
-          awarded: true,
-          badge: {
-            type: badge.type,
-            title: badge.title,
-            description: badge.description
-          }
-        };
-      } else {
-        console.log("ℹ️ Health Queen badge already awarded earlier.");
-        return { awarded: false };
-      }
+      return {
+        awarded: true,
+        badge: {
+          type: badgeToAward.type,
+          title: badgeToAward.title,
+          description: badgeToAward.description
+        }
+      };
     } else {
-      console.log(`ℹ️ Only ${daysWithAllHabits}/${daysInMonth} days with all habits logged.`);
+      console.log(`ℹ️ Only ${consecutiveWeeks} consecutive weeks of habit logging detected.`);
       return { 
         awarded: false, 
-        reason: `Only ${daysWithAllHabits}/${daysInMonth} days with all habits logged.`,
+        reason: `Only ${consecutiveWeeks} consecutive weeks of habit logging`,
         progress: {
-          daysCompleted: daysWithAllHabits,
-          daysRequired: daysInMonth,
-          percentageComplete: percentageComplete
+          weeksCompleted: consecutiveWeeks,
+          weeksRequired: 9
         }
       };
     }
@@ -282,7 +279,6 @@ const checkAndAwardHealthQueenBadge = async (patientId) => {
     return { awarded: false, error: error.message };
   }
 };
-
 
 // Function to check and award "Hot Mama" badge for 3-month consistency streak
 const checkAndAwardHotMamaBadge = async (patientId) => {
@@ -472,6 +468,8 @@ const logWaterIntake = async (req, res) => {
           },
       });
 
+      const waterGoalMet = updatedActivity.waterGoal && updatedActivity.water >= updatedActivity.waterGoal;
+      console.log(`Water goal status: ${waterGoalMet ? 'MET' : 'NOT MET'} (${updatedActivity.water}/${updatedActivity.waterGoal || 'no goal'})`);
       const waterLogs = await prisma.patientActivity.findMany({
         where: {
           patientId: id,
@@ -522,7 +520,11 @@ const logWaterIntake = async (req, res) => {
       }
       
       // Check for water streak badge
-      const streakResult = await checkWaterStreakBadge(id);
+      let streakResult = { awarded: false };
+    if (waterGoalMet) {
+      streakResult = await checkWaterStreakBadge(id);
+      console.log("Streak check result:", streakResult);
+    }
       
       // Get all the patient's badges to include in the response
       const patientBadges = await prisma.patientBadge.findMany({
@@ -546,7 +548,8 @@ const logWaterIntake = async (req, res) => {
         newBadges: {
           firstLog: firstLogBadge,
           streak: streakResult.awarded ? streakResult.badge : null
-        }
+        },
+        streakProgress: streakResult.progress || null
       });
   } catch (error) {
       console.error("Error logging water intake:", error);
@@ -555,97 +558,148 @@ const logWaterIntake = async (req, res) => {
 };
 
 // Function to check for water streak and award Water Wizard badge
+// Function to check for water streak and award Water Wizard badges progressively
 const checkWaterStreakBadge = async (patientId) => {
   try {
     // Get the current date and set to midnight
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
     
-    // Calculate 7 days ago
-    const sevenDaysAgo = new Date(today);
-    sevenDaysAgo.setDate(today.getDate() - 6);
+    // Calculate 63 days ago (9 weeks) to check for cumulative streaks
+    const sixtyThreeDaysAgo = new Date(today);
+    sixtyThreeDaysAgo.setDate(today.getDate() - 62);
     
-    // Find all activities in the past 7 days
+    // Find all activities in the past 9 weeks
     const activities = await prisma.patientActivity.findMany({
       where: {
         patientId: String(patientId),
         date: {
-          gte: sevenDaysAgo,
+          gte: sixtyThreeDaysAgo,
           lte: today,
         },
-        water: { not: null }, // Only count days where water was logged
       },
       orderBy: { date: 'asc' },
     });
     
-    // Check if we have a perfect streak (7 days of water logging)
-    // First, create an array of dates we're looking for
-    const requiredDates = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(sevenDaysAgo);
-      date.setDate(sevenDaysAgo.getDate() + i);
-      requiredDates.push(date.toISOString().split('T')[0]);
-    }
+    // Water Wizard badge progression
+    const waterWizardBadges = [
+      { type: BadgeType.WATER_WIZARD_I, weeksRequired: 1, title: "Water Wizard I", description: "Completed first week of meeting water goals" },
+      { type: BadgeType.WATER_WIZARD_II, weeksRequired: 2, title: "Water Wizard II", description: "Completed two consecutive weeks of meeting water goals" },
+      { type: BadgeType.WATER_WIZARD_III, weeksRequired: 3, title: "Water Wizard III", description: "Completed three consecutive weeks of meeting water goals" },
+      { type: BadgeType.WATER_WIZARD_IV, weeksRequired: 4, title: "Water Wizard IV", description: "Completed four consecutive weeks of meeting water goals" },
+      { type: BadgeType.WATER_WIZARD_V, weeksRequired: 5, title: "Water Wizard V", description: "Completed five consecutive weeks of meeting water goals" },
+      { type: BadgeType.WATER_WIZARD_VI, weeksRequired: 6, title: "Water Wizard VI", description: "Completed six consecutive weeks of meeting water goals" },
+      { type: BadgeType.WATER_WIZARD_VII, weeksRequired: 7, title: "Water Wizard VII", description: "Completed seven consecutive weeks of meeting water goals" },
+      { type: BadgeType.WATER_WIZARD_VIII, weeksRequired: 8, title: "Water Wizard VIII", description: "Completed eight consecutive weeks of meeting water goals" },
+      { type: BadgeType.WATER_WIZARD_IX, weeksRequired: 9, title: "Water Wizard IX", description: "Completed nine consecutive weeks of meeting water goals" }
+    ];
     
-    // Map activity dates to YYYY-MM-DD format
-    const activityDates = activities.map(activity => 
-      activity.date.toISOString().split('T')[0]
-    );
-    
-    // Check if all required dates have a water log
-    const hasCompleteStreak = requiredDates.every(date => 
-      activityDates.includes(date)
-    );
-    
-    if (hasCompleteStreak) {
-      // Check if badge exists, create if it doesn't
-      let badge = await prisma.badge.findUnique({
-        where: { type: BadgeType.WATER_WIZARD },
+    // Function to check consecutive weeks of water goal achievement
+    const checkConsecutiveWeeks = (activities) => {
+      // Group activities by week
+      const weekGroups = {};
+      activities.forEach(activity => {
+        const activityDate = new Date(activity.date);
+        const weekStart = new Date(activityDate);
+        weekStart.setDate(activityDate.getDate() - activityDate.getDay());
+        const weekKey = weekStart.toISOString().split('T')[0];
+        
+        if (!weekGroups[weekKey]) {
+          weekGroups[weekKey] = {
+            completeDays: 0,
+            hasMetGoal: false
+          };
+        }
+        
+        // Check if water goal was met for this day
+        const waterGoal = activity.waterGoal || 0;
+        const waterIntake = activity.water || 0;
+        
+        if (waterGoal > 0 && waterIntake >= waterGoal) {
+          weekGroups[weekKey].completeDays++;
+        }
       });
       
-      if (!badge) {
-        badge = await prisma.badge.create({
-          data: {
-            type: BadgeType.WATER_WIZARD,
-            title: "Water Wizard",
-            description: "Logged water daily for a week",
-          },
+      // Check for consecutive complete weeks (at least 5 days met goal)
+      const consecutiveWeeks = Object.values(weekGroups)
+        .filter(week => week.completeDays >= 5)
+        .length;
+      
+      return consecutiveWeeks;
+    };
+    
+    // Calculate consecutive complete weeks
+    const consecutiveWeeks = checkConsecutiveWeeks(activities);
+    
+    // Find the highest badge to award based on consecutive weeks
+    let badgeToAward = null;
+    for (const badgeLevel of waterWizardBadges) {
+      if (consecutiveWeeks >= badgeLevel.weeksRequired) {
+        // Check if the badge exists in the database
+        let badge = await prisma.badge.findUnique({
+          where: { type: badgeLevel.type },
         });
-      }
-      
-      // Check if the badge has already been awarded to this patient
-      const alreadyAwarded = await prisma.patientBadge.findUnique({
-        where: {
-          patientId_badgeId: {
-            patientId: patientId,
-            badgeId: badge.id,
-          },
-        },
-      });
-      
-      // Award the badge if not already awarded
-      if (!alreadyAwarded) {
-        await prisma.patientBadge.create({
-          data: {
-            patientId: patientId,
-            badgeId: badge.id,
+        
+        // If the badge doesn't exist, create it
+        if (!badge) {
+          badge = await prisma.badge.create({
+            data: {
+              type: badgeLevel.type,
+              title: badgeLevel.title,
+              description: badgeLevel.description,
+            },
+          });
+          console.log(`✨ Created ${badge.title} badge:`, badge);
+        }
+        
+        // Check if this patient already has the badge
+        const alreadyAwarded = await prisma.patientBadge.findUnique({
+          where: {
+            patientId_badgeId: {
+              patientId,
+              badgeId: badge.id,
+            },
           },
         });
         
-        return {
-          awarded: true,
-          badge: {
-            type: badge.type,
-            title: badge.title,
-            description: badge.description
-          }
-        };
+        // If not already awarded, set as badge to award
+        if (!alreadyAwarded) {
+          badgeToAward = badge;
+        }
       }
     }
     
-    return { awarded: false };
+    // Award the badge if found
+    if (badgeToAward) {
+      const awarded = await prisma.patientBadge.create({
+        data: {
+          patientId,
+          badgeId: badgeToAward.id,
+        },
+      });
+      console.log("✅ Awarded Water Wizard badge:", awarded);
+      
+      return {
+        awarded: true,
+        badge: {
+          type: badgeToAward.type,
+          title: badgeToAward.title,
+          description: badgeToAward.description
+        }
+      };
+    } else {
+      console.log(`ℹ️ Only ${consecutiveWeeks} consecutive weeks of water goal achievement detected.`);
+      return { 
+        awarded: false, 
+        reason: `Only ${consecutiveWeeks} consecutive weeks of water goal achievement`,
+        progress: {
+          weeksCompleted: consecutiveWeeks,
+          weeksRequired: 9
+        }
+      };
+    }
   } catch (error) {
-    console.error("Error checking water streak badge:", error);
+    console.error("Error checking water streak:", error);
     return { awarded: false, error: error.message };
   }
 };
@@ -724,8 +778,9 @@ const getWaterStatus = async (req, res) => {
     });
 
     const waterData = activities.map(activity => {
-      const goalMl = activity.waterGoal || 0; // Default goal is 2500 ml
-      // console.log(goalMl);
+      const goalMl = activity.waterGoal || 0;
+      const waterMl = activity.water || 0;
+      const goalMet = goalMl > 0 && waterMl >= goalMl;
 
       return {
           id: activity.id,
@@ -733,6 +788,7 @@ const getWaterStatus = async (req, res) => {
           day: activity.date.toLocaleDateString('en-US', { weekday: 'short' }), // Short weekday name
           waterMl: activity.water,
           goalMl: goalMl, // Fixed: changed 'wate' to 'goalMl'
+          goalMet: goalMet
       };
   });
   const streakStatus = await checkWaterStreakBadge(id);
@@ -752,10 +808,16 @@ const getWaterStatus = async (req, res) => {
     }
   });
 
+  const hasWaterWizard = patientBadges.some(pb => 
+    pb.badge.type === 'WATER_WIZARD' || pb.badge.type === 'WATER_WIZARD_I'
+  );
+
   res.status(200).json({
     waterData,
-    badges: patientBadges,
-    streakStatus
+    waterWizardStatus: {
+      hasWeeklyBadge: hasWaterWizard,
+      currentProgress: streakStatus.progress || null
+    }
   });
   } catch (error) {
     console.error("Error fetching water status:", error);
@@ -1159,7 +1221,6 @@ const getSleepStatus = async (req, res) => {
 
         res.status(200).json({
             sleepData,
-            badges: patientBadges,
             newBadge: sleepWizardBadgeResult && sleepWizardBadgeResult.awarded ? sleepWizardBadgeResult.badge : null
         });
     } catch (error) {
@@ -1382,101 +1443,139 @@ const checkAndAwardOnTheMoveBadge = async (patientId) => {
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
     
-    // Get the first day of the current month
-    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    // Calculate 63 days ago (9 weeks) to check for cumulative streaks
+    const sixtyThreeDaysAgo = new Date(today);
+    sixtyThreeDaysAgo.setDate(today.getDate() - 62);
     
-    // Get the last day of the current month (set to the first day of next month and subtract 1 day)
-    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    
-    // Get the total number of days in the current month
-    const daysInMonth = lastDayOfMonth.getDate();
-    
-    // Find all activities in the current month where steps were logged
+    // Find all activities in the past 9 weeks with step goals logged
     const activities = await prisma.patientActivity.findMany({
       where: {
         patientId: String(patientId),
         date: {
-          gte: firstDayOfMonth,
-          lte: lastDayOfMonth,
+          gte: sixtyThreeDaysAgo,
+          lte: today,
         },
         steps: { not: null },
         stepsGoal: { not: null },
       },
     });
     
-    // Filter activities where the step goal was met
-    const activitiesWithMetGoals = activities.filter(activity => {
-      return activity.steps >= activity.stepsGoal && activity.stepsGoal > 0;
-    });
+    // On the Move badge progression
+    const onTheMoveBadges = [
+      { type: BadgeType.ON_THE_MOVE_I, weeksRequired: 1, title: "On the Move I", description: "Completed first week of meeting step goals" },
+      { type: BadgeType.ON_THE_MOVE_II, weeksRequired: 2, title: "On the Move II", description: "Completed two consecutive weeks of meeting step goals" },
+      { type: BadgeType.ON_THE_MOVE_III, weeksRequired: 3, title: "On the Move III", description: "Completed three consecutive weeks of meeting step goals" },
+      { type: BadgeType.ON_THE_MOVE_IV, weeksRequired: 4, title: "On the Move IV", description: "Completed four consecutive weeks of meeting step goals" },
+      { type: BadgeType.ON_THE_MOVE_V, weeksRequired: 5, title: "On the Move V", description: "Completed five consecutive weeks of meeting step goals" },
+      { type: BadgeType.ON_THE_MOVE_VI, weeksRequired: 6, title: "On the Move VI", description: "Completed six consecutive weeks of meeting step goals" },
+      { type: BadgeType.ON_THE_MOVE_VII, weeksRequired: 7, title: "On the Move VII", description: "Completed seven consecutive weeks of meeting step goals" },
+      { type: BadgeType.ON_THE_MOVE_VIII, weeksRequired: 8, title: "On the Move VIII", description: "Completed eight consecutive weeks of meeting step goals" },
+      { type: BadgeType.ON_THE_MOVE_IX, weeksRequired: 9, title: "On the Move IX", description: "Completed nine consecutive weeks of meeting step goals" }
+    ];
     
-    console.log(`Found ${activitiesWithMetGoals.length} days with met step goals out of ${daysInMonth} days in the month`);
-    
-    // Check if goals were met for at least 25 days in the month
-    if (activitiesWithMetGoals.length >= 25) {
-      console.log("🏅 Step goals met for at least 25 days this month, checking for badge...");
-      
-      // Check if the badge exists in the database
-      let badge = await prisma.badge.findUnique({
-        where: { type: BadgeType.ON_THE_MOVE },
+    // Function to check consecutive weeks of step goal achievement
+    const checkConsecutiveWeeks = (activities) => {
+      // Group activities by week
+      const weekGroups = {};
+      activities.forEach(activity => {
+        const activityDate = new Date(activity.date);
+        const weekStart = new Date(activityDate);
+        weekStart.setDate(activityDate.getDate() - activityDate.getDay());
+        const weekKey = weekStart.toISOString().split('T')[0];
+        
+        if (!weekGroups[weekKey]) {
+          weekGroups[weekKey] = {
+            completeDays: 0,
+            hasMetGoal: false
+          };
+        }
+        
+        // Check if step goal was met for this day
+        if (activity.steps >= activity.stepsGoal && activity.stepsGoal > 0) {
+          weekGroups[weekKey].completeDays++;
+        }
       });
       
-      // If the badge doesn't exist, create it
-      if (!badge) {
-        badge = await prisma.badge.create({
-          data: {
-            type: BadgeType.ON_THE_MOVE,
-            title: "On the move!",
-            description: "Step goals are met every day for a month (at least 25 days in a month)",
+      // Check for consecutive complete weeks (at least 5 days met goal)
+      const consecutiveWeeks = Object.values(weekGroups)
+        .filter(week => week.completeDays >= 5)
+        .length;
+      
+      return consecutiveWeeks;
+    };
+    
+    // Calculate consecutive complete weeks
+    const consecutiveWeeks = checkConsecutiveWeeks(activities);
+    
+    // Find the highest badge to award based on consecutive weeks
+    let badgeToAward = null;
+    for (const badgeLevel of onTheMoveBadges) {
+      if (consecutiveWeeks >= badgeLevel.weeksRequired) {
+        // Check if the badge exists in the database
+        let badge = await prisma.badge.findUnique({
+          where: { type: badgeLevel.type },
+        });
+        
+        // If the badge doesn't exist, create it
+        if (!badge) {
+          badge = await prisma.badge.create({
+            data: {
+              type: badgeLevel.type,
+              title: badgeLevel.title,
+              description: badgeLevel.description,
+            },
+          });
+          console.log(`✨ Created ${badge.title} badge:`, badge);
+        }
+        
+        // Check if this patient already has the badge
+        const alreadyAwarded = await prisma.patientBadge.findUnique({
+          where: {
+            patientId_badgeId: {
+              patientId,
+              badgeId: badge.id,
+            },
           },
         });
-        console.log("✨ Created On the move! badge:", badge);
+        
+        // If not already awarded, set as badge to award
+        if (!alreadyAwarded) {
+          badgeToAward = badge;
+        }
       }
-      
-      // Check if this patient already has the badge
-      const alreadyAwarded = await prisma.patientBadge.findUnique({
-        where: {
-          patientId_badgeId: {
-            patientId,
-            badgeId: badge.id,
-          },
+    }
+    
+    // Award the badge if found
+    if (badgeToAward) {
+      const awarded = await prisma.patientBadge.create({
+        data: {
+          patientId,
+          badgeId: badgeToAward.id,
         },
       });
+      console.log("✅ Awarded On the Move badge:", awarded);
       
-      // If not already awarded, award the badge
-      if (!alreadyAwarded) {
-        const awarded = await prisma.patientBadge.create({
-          data: {
-            patientId,
-            badgeId: badge.id,
-          },
-        });
-        console.log("✅ Awarded On the move! badge:", awarded);
-        
-        return {
-          awarded: true,
-          badge: {
-            type: badge.type,
-            title: badge.title,
-            description: badge.description
-          }
-        };
-      } else {
-        console.log("ℹ️ On the move! badge already awarded earlier.");
-        return { awarded: false };
-      }
+      return {
+        awarded: true,
+        badge: {
+          type: badgeToAward.type,
+          title: badgeToAward.title,
+          description: badgeToAward.description
+        }
+      };
     } else {
-      console.log(`ℹ️ Step goals only met for ${activitiesWithMetGoals.length} days, need at least 25 days.`);
+      console.log(`ℹ️ Only ${consecutiveWeeks} consecutive weeks of step goal achievement detected.`);
       return { 
         awarded: false, 
-        reason: `Step goals only met for ${activitiesWithMetGoals.length} days, need at least 25 days.`,
+        reason: `Only ${consecutiveWeeks} consecutive weeks of step goal achievement`,
         progress: {
-          daysCompleted: activitiesWithMetGoals.length,
-          daysRequired: 25
+          weeksCompleted: consecutiveWeeks,
+          weeksRequired: 9
         }
       };
     }
   } catch (error) {
-    console.error("Error checking/awarding On the move! badge:", error);
+    console.error("Error checking/awarding On the Move badge:", error);
     return { awarded: false, error: error.message };
   }
 };

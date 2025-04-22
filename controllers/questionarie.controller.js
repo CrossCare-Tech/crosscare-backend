@@ -7,11 +7,7 @@ const submitResponse = async (req, res) => {
 
   try {
     // First, find the questionnaire associated with the patient
-    const questionnaire = await prisma.questionnaire.findFirst({
-      where: { patientId: patientId }
-    });
     
-    console.log("Found questionnaire:", questionnaire?.id || "None");
 
     // Check if request body is an array
     if (Array.isArray(req.body)) {
@@ -73,7 +69,6 @@ const submitResponse = async (req, res) => {
               response,  // Update the response
               flag,      // Update the flag
               timestamp: new Date(timestamp),  // Update the timestamp in UTC
-              questionnaireId: questionnaire?.id || null  // Update the questionnaire ID
             }
           });
         } else {
@@ -86,7 +81,6 @@ const submitResponse = async (req, res) => {
               response,
               flag,
               timestamp: new Date(timestamp),  // Set timestamp to UTC
-              questionnaireId: questionnaire?.id || null  // Set the questionnaire ID
             }
           });
         }
@@ -156,7 +150,6 @@ const submitResponse = async (req, res) => {
             response,  // Update the response
             flag,      // Update the flag
             timestamp: new Date(timestamp),  // Update the timestamp in UTC
-            questionnaireId: questionnaire?.id || null  // Update the questionnaire ID
           }
         });
       } else {
@@ -169,7 +162,6 @@ const submitResponse = async (req, res) => {
             response,
             flag,
             timestamp: new Date(timestamp),  // Set timestamp to UTC
-            questionnaireId: questionnaire?.id || null  // Set the questionnaire ID
           }
         });
       }
