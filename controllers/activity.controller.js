@@ -911,16 +911,16 @@ const checkAndAwardSleepWizardBadge = async (patientId) => {
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
     
-    // Calculate 7 days ago
-    const sevenDaysAgo = new Date(today);
-    sevenDaysAgo.setDate(today.getDate() - 6);
+    // Calculate 63 days ago (9 weeks) to check for cumulative streaks
+    const sixtyThreeDaysAgo = new Date(today);
+    sixtyThreeDaysAgo.setDate(today.getDate() - 62);
     
-    // Find all activities in the past 7 days with sleep logged
+    // Find all activities in the past 9 weeks with sleep logged
     const activities = await prisma.patientActivity.findMany({
       where: {
         patientId: String(patientId),
         date: {
-          gte: sevenDaysAgo,
+          gte: sixtyThreeDaysAgo,
           lte: today,
         },
         sleepStart: { not: null },
@@ -929,80 +929,116 @@ const checkAndAwardSleepWizardBadge = async (patientId) => {
       orderBy: { date: 'asc' },
     });
     
-    // Check if we have a perfect streak (7 days of sleep logging)
-    // First, create an array of dates we're looking for
-    const requiredDates = [];
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(sevenDaysAgo);
-      date.setDate(sevenDaysAgo.getDate() + i);
-      requiredDates.push(date.toISOString().split('T')[0]);
+    // Sleep Wizard badge progression
+    const sleepWizardBadges = [
+      { type: BadgeType.SLEEP_WIZARD_I, weeksRequired: 1, title: "Sleep Wizard I", description: "Completed first week of consistent sleep logging" },
+      { type: BadgeType.SLEEP_WIZARD_II, weeksRequired: 2, title: "Sleep Wizard II", description: "Completed two consecutive weeks of sleep logging" },
+      { type: BadgeType.SLEEP_WIZARD_III, weeksRequired: 3, title: "Sleep Wizard III", description: "Completed three consecutive weeks of sleep logging" },
+      { type: BadgeType.SLEEP_WIZARD_IV, weeksRequired: 4, title: "Sleep Wizard IV", description: "Completed four consecutive weeks of sleep logging" },
+      { type: BadgeType.SLEEP_WIZARD_V, weeksRequired: 5, title: "Sleep Wizard V", description: "Completed five consecutive weeks of sleep logging" },
+      { type: BadgeType.SLEEP_WIZARD_VI, weeksRequired: 6, title: "Sleep Wizard VI", description: "Completed six consecutive weeks of sleep logging" },
+      { type: BadgeType.SLEEP_WIZARD_VII, weeksRequired: 7, title: "Sleep Wizard VII", description: "Completed seven consecutive weeks of sleep logging" },
+      { type: BadgeType.SLEEP_WIZARD_VIII, weeksRequired: 8, title: "Sleep Wizard VIII", description: "Completed eight consecutive weeks of sleep logging" },
+      { type: BadgeType.SLEEP_WIZARD_IX, weeksRequired: 9, title: "Sleep Wizard IX", description: "Completed nine consecutive weeks of sleep logging" }
+    ];
+    
+    // Function to check consecutive weeks of sleep logging
+    const checkConsecutiveWeeks = (activities) => {
+      // Group activities by week
+      const weekGroups = {};
+      activities.forEach(activity => {
+        const activityDate = new Date(activity.date);
+        const weekStart = new Date(activityDate);
+        weekStart.setDate(activityDate.getDate() - activityDate.getDay());
+        const weekKey = weekStart.toISOString().split('T')[0];
+        
+        if (!weekGroups[weekKey]) {
+          weekGroups[weekKey] = {
+            completeDays: new Set(),
+            hasActivityEachDay: false
+          };
+        }
+        
+        weekGroups[weekKey].completeDays.add(activityDate.toISOString().split('T')[0]);
+      });
+      
+      // Check for consecutive complete weeks (7 days logged)
+      const consecutiveWeeks = Object.values(weekGroups)
+        .filter(week => week.completeDays.size === 7)
+        .length;
+      
+      return consecutiveWeeks;
+    };
+    
+    // Calculate consecutive complete weeks
+    const consecutiveWeeks = checkConsecutiveWeeks(activities);
+    
+    // Find the highest badge to award based on consecutive weeks
+    let badgeToAward = null;
+    for (const badgeLevel of sleepWizardBadges) {
+      if (consecutiveWeeks >= badgeLevel.weeksRequired) {
+        // Check if the badge exists in the database
+        let badge = await prisma.badge.findUnique({
+          where: { type: badgeLevel.type },
+        });
+        
+        // If the badge doesn't exist, create it
+        if (!badge) {
+          badge = await prisma.badge.create({
+            data: {
+              type: badgeLevel.type,
+              title: badgeLevel.title,
+              description: badgeLevel.description,
+            },
+          });
+          console.log(`✨ Created ${badge.title} badge:`, badge);
+        }
+        
+        // Check if this patient already has the badge
+        const alreadyAwarded = await prisma.patientBadge.findUnique({
+          where: {
+            patientId_badgeId: {
+              patientId,
+              badgeId: badge.id,
+            },
+          },
+        });
+        
+        // If not already awarded, set as badge to award
+        if (!alreadyAwarded) {
+          badgeToAward = badge;
+        }
+      }
     }
     
-    // Map activity dates to YYYY-MM-DD format
-    const activityDates = activities.map(activity => 
-      activity.date.toISOString().split('T')[0]
-    );
-    
-    // Check if all required dates have a sleep log
-    const hasCompleteStreak = requiredDates.every(date => 
-      activityDates.includes(date)
-    );
-    
-    if (hasCompleteStreak) {
-      console.log("🏅 7-day sleep streak detected, checking for Sleep Wizard badge...");
-      
-      // Check if the badge exists in the database
-      let badge = await prisma.badge.findUnique({
-        where: { type: BadgeType.SLEEP_WIZARD },
-      });
-      
-      // If the badge doesn't exist, create it
-      if (!badge) {
-        badge = await prisma.badge.create({
-          data: {
-            type: BadgeType.SLEEP_WIZARD,
-            title: "Sleep Wizard",
-            description: "Logged sleep daily for a week",
-          },
-        });
-        console.log("✨ Created Sleep Wizard badge:", badge);
-      }
-      
-      // Check if this patient already has the badge
-      const alreadyAwarded = await prisma.patientBadge.findUnique({
-        where: {
-          patientId_badgeId: {
-            patientId,
-            badgeId: badge.id,
-          },
+    // Award the badge if found
+    if (badgeToAward) {
+      const awarded = await prisma.patientBadge.create({
+        data: {
+          patientId,
+          badgeId: badgeToAward.id,
         },
       });
+      console.log("✅ Awarded Sleep Wizard badge:", awarded);
       
-      // If not already awarded, award the badge
-      if (!alreadyAwarded) {
-        const awarded = await prisma.patientBadge.create({
-          data: {
-            patientId,
-            badgeId: badge.id,
-          },
-        });
-        console.log("✅ Awarded Sleep Wizard badge:", awarded);
-        
-        return {
-          awarded: true,
-          badge: {
-            type: badge.type,
-            title: badge.title,
-            description: badge.description
-          }
-        };
-      } else {
-        console.log("ℹ️ Sleep Wizard badge already awarded earlier.");
-        return { awarded: false };
-      }
+      return {
+        awarded: true,
+        badge: {
+          type: badgeToAward.type,
+          title: badgeToAward.title,
+          description: badgeToAward.description
+        }
+      };
     } else {
-      console.log("ℹ️ No complete 7-day sleep streak detected.");
-      return { awarded: false, reason: "No complete 7-day sleep streak" };
+      console.log(`ℹ️ Only ${consecutiveWeeks} consecutive weeks of sleep logging detected.`);
+      return { 
+        awarded: false, 
+        reason: `Only ${consecutiveWeeks} consecutive weeks of sleep logging`,
+        progress: {
+          weeksCompleted: consecutiveWeeks,
+          weeksRequired: 9
+        }
+      };
     }
   } catch (error) {
     console.error("Error checking/awarding Sleep Wizard badge:", error);
