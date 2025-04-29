@@ -16,6 +16,144 @@ const QUESTIONNAIRE_DOMAINS = [
         order: 1,
       },
       {
+        questionId: "q1-a", 
+        text: "Do you live alone?",
+        possibleFlag: null,
+        order: 1.1,
+      },
+      {
+        questionId: "q1-b",
+        text: "Do you have an elevator that works?",
+        possibleFlag: null,
+        order: 1.2,
+      },
+      {
+        questionId: "q1-c",
+        text: "Will anyone come stay with you once you have the baby?",
+        possibleFlag: "Housing instability / temporary housing",
+        order: 1.3,
+      },
+      {
+        questionId: "q1-d",
+        text: "Who else lives in the home with you?",
+        possibleFlag: null,
+        order: 1.4,
+      },
+      {
+        questionId: "q1-f",
+        text: "What floor do you live on?",
+        possibleFlag: null,
+        order: 1.5,
+      },
+      {
+        questionId: "q1-g",
+        text: "Do you have your own room?",
+        possibleFlag: null,
+        order: 1.6,
+      },
+      {
+        questionId: "q1-h",
+        text: "Will you and the baby share a room or will they have their own?",
+        possibleFlag: null,
+        order: 1.7,
+      },
+      {
+        questionId: "q1-i",
+        text: "Will you and the baby share a room or will they have their own?",
+        possibleFlag: null,
+        order: 1.8,
+      },
+      {
+        questionId: "q1-smoke",
+        text: "Does anyone who lives in the home or that you are around a lot smoke?",
+        possibleFlag: "Smoke exposure risk",
+        order: 2.1,
+      },
+      {
+        questionId: "q1-smoke-info",
+        text: "Record information, effects of second hand smoke, tips?",
+        possibleFlag: "Second-hand smoke exposure - provided information",
+        order: 2.2,
+      },
+      {
+        questionId: "q1-chemicals",
+        text: "Does anyone in your home or who comes to your home a lot work in a factory or with chemicals?",
+        possibleFlag: "Chemical exposure risk",
+        order: 2.3,
+      },
+      {
+        questionId: "q1-chemicals-info",
+        text: "Have them change their clothes, shoes, and shower before coming in the home. Do not wash their work clothes. Explain why-potential exposure to chemicals",
+        possibleFlag: "Chemical exposure - provided safety information",
+        order: 2.4,
+      },
+      {
+        questionId: "q1-neighborhood",
+        text: "Do you feel safe in your neighborhood?",
+        possibleFlag: "Neighborhood safety assessment",
+        order: 6.1,
+      },
+      {
+        questionId: "q1-unsafe-reason",
+        text: "What would make you feel safer?",
+        possibleFlag: "Neighborhood safety concerns",
+        order: 6.2,
+      },
+      {
+        questionId: "q1-home-unsafe",
+        text: "Does anyone in your home make you feel unsafe because of physical or verbal abuse?",
+        possibleFlag: "Domestic safety concern - HIGH PRIORITY",
+        order: 6.3,
+      },
+      {
+        questionId: "q1-highway",
+        text: "Do you live close to a highway or area with a lot of car and truck traffic?",
+        possibleFlag: "Air quality concern - traffic",
+        order: 6.4,
+      },
+      {
+        questionId: "q1-windows",
+        text: "Do you open the windows for air?",
+        possibleFlag: "Air quality management",
+        order: 6.5,
+      },
+      {
+        questionId: "q1-exhaust-info",
+        text: "Trucks and car exaust can put out harmful chemicals",
+        possibleFlag: "Air quality education provided",
+        order: 6.6,
+      },
+      {
+        questionId: "q1-construction",
+        text: "Is there construction on old homes or businesses near your home?",
+        possibleFlag: "Air quality concern - construction",
+        order: 6.7,
+      },
+      {
+        questionId: "q1-lead-info",
+        text: "Try to keep the windows closed so you are breathing in less dust from outside and the home. This can cause lead poisoning.",
+        possibleFlag: "Lead exposure risk - provided information",
+        order: 6.8,
+      },
+      {
+        questionId: "q1-air-filter",
+        text: "Do you have an air filter?",
+        possibleFlag: "Air quality management",
+        order: 6.9,
+      },
+      {
+        questionId: "q1-filter-info",
+        text: "Try to keep the windows closed so you are breathing in less exhaust. Keep the filter clean.",
+        possibleFlag: "Air filter maintenance education provided",
+        order: 6.91,
+      },
+      {
+        questionId: "q1-no-filter-info",
+        text: "Try to keep the windows closed so you are breathing in less exhaust.",
+        possibleFlag: "Air quality education provided",
+        order: 6.92,
+      },
+      {
         questionId: "q1-2",
         text: "Are you worried about losing your housing in the near future?",
         possibleFlag: "Housing insecurity",
@@ -84,6 +222,54 @@ const QUESTIONNAIRE_DOMAINS = [
         possibleFlag: "Financial abuse",
         order: 5,
       },
+      {
+        questionId: "q2-6",
+        text: "How do you get to and from work, doctor appointments, and the grocery store?",
+        possibleFlag: "Transportation",
+        order: 6,
+      },
+      {
+        questionId: "q2-7",
+        text: "Do you have problems getting to these places because of transportation?",
+        possibleFlag: "Transportation support needed",
+        order: 7,
+      },
+      {
+        questionId: "q2-8",
+        text: "Please describe the transportation issues you have",
+        possibleFlag: "Transportation support needed",
+        order: 8,
+      },
+      {
+        questionId: "q2-9",
+        text: "Is there anyone that helps you with transportation?",
+        possibleFlag: "Transportation support needed",
+        order: 9,
+      },
+      {
+        questionId: "q2-10",
+        text: "If transporatio is unreliable, she has to walk or take the bus ask if she has a plan to do something differently when the baby comes",
+        possibleFlag: "Transportation support needed",
+        order: 10,
+      },
+      {
+        questionId: "q2-11",
+        text:"Are there any traditions or beliefs about pregnancy in you culture?",
+        possibleFlag: "Cultural beliefs",
+        order: 11,
+      },
+      {
+        questionId: "q2-12",
+        text: "Activities that you should or shoulnt do during pregnancy",
+        possibleFlag: "Pregnancy education",
+        order: 12,
+      },
+      {
+        questionId: "q2-13",
+        text: "Any foods that you should or shouldnt eat durning pregnancy in your culture",
+        possibleFlag: "Cultural",
+        order: 13,
+      },
     ],
   },
   {
@@ -110,6 +296,192 @@ const QUESTIONNAIRE_DOMAINS = [
         text: "Is it hard to afford basic needs?",
         possibleFlag: "Financial strain",
         order: 3,
+      },
+      {
+        questionId: "q3-10",
+        text: "Do you work?",
+        possibleFlag: null,
+        order: 3.1,
+      },
+      {
+        questionId: "q3-11",
+        text: "Are you paid per hour or do you have a set salary",
+        possibleFlag: null,
+        order: 3.2,
+      },
+      {
+        questionId: "q3-12",
+        text: "Do you have any worries about money with the baby coming",
+        possibleFlag: null,
+        order: 3.3,
+      },
+      {
+        questionId: "q3-13",
+        text: "Will you have enough income to meet your needs while you are on maternity leave",
+        possibleFlag: null,
+        order: 3.4,
+      },
+      {
+        questionId: "q3-14",
+        text: "What is you plan to support yourself and the baby during maternity leave? Do you need help?",
+        possibleFlag: null,
+        order: 3.5,
+      },
+      {
+        questionId: "q3-15",
+        text: "Do you worry about having enough food for you and your family?",
+        possibleFlag: null,
+        order: 3.6,
+      },
+      {
+        questionId: "q3-16",
+        text: "Do you always have enough food for you and your family?",
+        possibleFlag: "Food insecurity",
+        order: 3.7,
+      },
+      {
+        questionId: "q3-17",
+        text: "Do you have problems getting food especially fresh fruits and vegetables?",
+        possibleFlag: null,
+        order: 3.8,
+      },
+      {
+        questionId: "q3-4",
+        text: "Would you like help finding a job?",
+        possibleFlag: "Referral to workforce navigator",
+        order: 4,
+      },
+      {
+        questionId: "q3-5",
+        text: "Interested in help with school or job training?",
+        possibleFlag: "Education support",
+        order: 5,
+      },
+      {
+        questionId: "q3-6",
+        text: "Do you need better daycare?",
+        possibleFlag: "Childcare need",
+        order: 6,
+      },
+      {
+        questionId: "q3-a",
+        text: "Is this your first pregnancy?",
+        possibleFlag: "First pregnancy assessment",
+        order: 6.1,
+      },
+      {
+        questionId: "q3-b",
+        text: "Was this planned?",
+        possibleFlag: null,
+        order: 6.2,
+      },
+      {
+        questionId: "q3-c",
+        text: "What was the result of the pregnancy?",
+        possibleFlag: null,
+        order: 6.3,
+      },
+      {
+        questionId: "q3-d",
+        text: "How do you feel about the pregnancy and having a baby?",
+        possibleFlag: null,
+        order: 6.4,
+      },
+      {
+        questionId: "q3-e",
+        text: "Abortion?",
+        possibleFlag: null,
+        order: 6.5,
+      },
+      {
+        questionId: "q3-f",
+        text: "Is the father excited/happy?",
+        possibleFlag: null,
+        order: 6.6,
+      },
+      {
+        questionId: "q3-g",
+        text: "How does your family feel?",
+        possibleFlag: null,
+        order: 6.7,
+      },
+      {
+        questionId: "q3-h",
+        text: "Who is a part of your support system?",
+        possibleFlag: null,
+        order: 6.8,
+      },
+      {
+        questionId: "q3-i",
+        text: "Are there other family members that cause you stress? Why",
+        possibleFlag: null,
+        order: 6.9,
+      },
+      {
+        questionId: "q3-j",
+        text: "Are you still in a relationship with the baby's father?",
+        possibleFlag: null,
+        order: 7.0,
+      },
+      {
+        questionId: "q3-k",
+        text: "Does he have any other children? If yes is do you have any stress caused by his previous child's mother and/or family",
+        possibleFlag: null,
+        order: 7.1,
+      },
+      {
+        questionId: "q3-l",
+        text: "Were you able to carry the baby full term?",
+        possibleFlag: null,
+        order: 7.2,
+      },
+      {
+        questionId: "q3-m",
+        text: "Were there any issues during pregnancy and/or birth?",
+        possibleFlag: null,
+        order: 7.3,
+      },
+      {
+        questionId: "q3-n",
+        text: "What was the baby's weight, How old is your baby?",
+        possibleFlag: null,
+        order: 7.4,
+      },
+      {
+        questionId: "q3-o",
+        text: "Does your other child/children know that you are pregnant?",
+        possibleFlag: null,
+        order: 7.5,
+      },
+      {
+        questionId: "q3-p",
+        text: "What was their reaction?",
+        possibleFlag: null,
+        order: 7.6,
+      },
+      {
+        questionId: "q3-q",
+        text: "How did their reaction make you feel?",
+        possibleFlag: null,
+        order: 7.7,
+      },
+      {
+        questionId: "q3-r",
+        text: "Do you have any child care issue with your current child/children?",
+        possibleFlag: null,
+        order: 7.8,
+      },
+      {
+        questionId: "q3-s",
+        text: "Will having another baby cause any more stress?",
+        possibleFlag: null,
+        order: 7.9,
+      },
+      {
+        questionId: "q3-t",
+        text: "Do you have any stress connected to your children?",
+        possibleFlag: null,
+        order: 8.0,
       },
       {
         questionId: "q3-4",
@@ -162,6 +534,90 @@ const QUESTIONNAIRE_DOMAINS = [
         possibleFlag: "Physical activity support",
         order: 4,
       },
+      {
+        questionId: "q4-5",
+        text: "What is you favorite thing to eat?",
+        possibleFlag: null,
+        order: 4.1,
+      },
+      {
+        questionId: "q4-6",
+        text: "Are you having any cravings?",
+        possibleFlag: null,
+        order: 4.2,
+      },
+      {
+        questionId: "q4-7",
+        text: "Are there any foods that make you feel sick?",
+        possibleFlag: null,
+        order: 4.3,
+      },
+      {
+        questionId: "q4-8",
+        text: "Any foods that you should or shouldnt eat durning pregnancy in your culture?",
+        possibleFlag: null,
+        order: 4.4,
+      },
+      {
+        questionId: "q4-9",
+        text: "Do you have a birthing plan?",
+        possibleFlag: null,
+        order: 4.5,
+      },
+      {
+        questionId: "q4-10",
+        text: "Have you thought about how you want to give birth? Who will be in the room? Have you taken any classes or do you plan to?",
+        possibleFlag: null,
+        order: 4.6,
+      },
+      {
+        questionId: "q4-11",
+        text: "What is your perfect way to give birth? Do want pain medications? Who do you want in the room with you?",
+        possibleFlag: null,
+        order: 4.7,
+      },
+      {
+        questionId: "q4-13",
+        text: "Describe your birthing plan I can record it for you",
+        possibleFlag: null,
+        order: 4.8,
+      },
+      {
+        questionId: "q4-14",
+        text: "Prompt videos on birthing plan give the option to bookmark for later",
+        possibleFlag: null,
+        order: 4.9,
+      },
+      {
+        questionId: "q4-15",
+        text: "Describe your birthing plan I can record it for you",
+        possibleFlag: null,
+        order: 5.0,
+      },
+      {
+        questionId: "q4-16",
+        text: "Do you plan to breastfeed?",
+        possibleFlag: null,
+        order: 5.1,
+      },
+      {
+        questionId: "q4-17",
+        text: "Are you nervous about breastfeeding? Do you have assistance with breastfeeding?",
+        possibleFlag: null,
+        order: 5.2,
+      },
+      {
+        questionId: "q4-18",
+        text: "Did you breastfeed before? Did you have any trouble?",
+        possibleFlag: null,
+        order: 5.3,
+      },
+      {
+        questionId: "q4-19",
+        text: "Did you breastfeed before? Did you have any trouble?",
+        possibleFlag: null,
+        order: 5.4,
+      },
     ],
   },
   {
@@ -200,300 +656,102 @@ const QUESTIONNAIRE_DOMAINS = [
       },
     ],
   },
+  {
+    id: "domain-7",
+    name: "domain-7",
+    title: "DOMAIN VII",
+    description: "Stressors",
+    order: 7,
+    questions:[
+      {
+        questionId: "q7-1",
+        text: "How was your day?",
+        possibleFlag: "Stressors",
+        order: 1,
+      },
+      {
+        questionId: "q7-2",
+        text: "Are you having any stress?  What is stressing you?",
+        possibleFlag: "Stressors",
+        order: 2,
+      },
+      {
+        questionId: "q7-3",
+        text: "Who do you talk to when you are stressed?",
+        possibleFlag: "Stressors",
+        order: 3,
+      },
+      {
+        questionId: "q7-4",
+        text: "What do you do to deal with stress?",
+        possibleFlag: "Stressors",
+        order: 4,
+      },
+      {
+        questionId: "q7-5",
+        text: "Do you feel like it helps?",
+        possibleFlag: "Stressors",
+        order: 5,
+      },
+      {
+        questionId: "q7-6",
+        text: " How often do you feel stressed?",
+        possibleFlag: "Stressors",
+        order: 6,
+      },
+      {
+        questionId: "q7-7",
+        text: "Discuss why you feel stressed so often?",
+        possibleFlag: "Stressors",
+        order: 7,
+      },
+      {
+        questionId: "q7-8",
+        text: "Do you stress about the same thing everyday or multiple times?",
+        possibleFlag: "Stressors",
+        order: 8,
+      },
+    ]
+  }
 ];
 
 async function main() {
   console.log('Seeding database...');
 
-  // Create self-care categories
-  const categories = [
-    {
-      title: "Cope with Nightmares",
-      iconType: "cloud",
-      count: 5,
-      contentType: "EXERCISES",
-      gradientStart: "#3949AB",
-      gradientMiddle: "#5C6BC0",
-      gradientEnd: "#7986CB",
-    },
-    {
-      title: "For Deep Sleep",
-      iconType: "moon",
-      count: 8,
-      contentType: "EXERCISES",
-      gradientStart: "#303F9F",
-      gradientMiddle: "#3F51B5",
-      gradientEnd: "#5C6BC0",
-    },
-    {
-      title: "Sleep Habit Pack",
-      iconType: "cloud",
-      count: 8,
-      contentType: "EXERCISES",
-      gradientStart: "#4527A0",
-      gradientMiddle: "#00796B",
-      gradientEnd: "#009688",
-    },
-    {
-      title: "For Fresh Mornings",
-      iconType: "sun",
-      count: 5,
-      contentType: "EXERCISES",
-      gradientStart: "#00796B",
-      gradientMiddle: "#009688",
-      gradientEnd: "#00ACC1",
-    },
-    {
-      title: "Remote Wellness Pack",
-      iconType: "cloud",
-      count: 7,
-      contentType: "EXERCISES",
-      gradientStart: "#3949AB",
-      gradientMiddle: "#1976D2",
-      gradientEnd: "#0288D1",
-    },
-    {
-      title: "Calm your Mind",
-      iconType: "feather",
-      count: 10,
-      contentType: "EXERCISES",
-      gradientStart: "#4527A0",
-      gradientMiddle: "#512DA8",
-      gradientEnd: "#5E35B1",
-    },
-    {
-      title: "Sleep Sounds",
-      iconType: "cloud",
-      count: 18,
-      contentType: "AUDIOS",
-      gradientStart: "#00796B",
-      gradientMiddle: "#0097A7",
-      gradientEnd: "#0288D1",
-    },
-    {
-      title: "Sleep Stories",
-      iconType: "cloud",
-      count: 33,
-      contentType: "STORIES",
-      gradientStart: "#00796B",
-      gradientMiddle: "#00838F",
-      gradientEnd: "#006064",
-    },
-    {
-      title: "Essential Wellness Pack",
-      iconType: "cloud",
-      count: 12,
-      contentType: "EXERCISES",
-      gradientStart: "#3949AB",
-      gradientMiddle: "#303F9F",
-      gradientEnd: "#1A237E",
-    },
-    {
-      title: "Put Your Mind to Ease",
-      iconType: "feather",
-      count: 8,
-      contentType: "EXERCISES",
-      gradientStart: "#303F9F",
-      gradientMiddle: "#283593",
-      gradientEnd: "#1A237E",
-    },
-    {
-      title: "My Favorites",
-      iconType: "heart",
-      count: 0,
-      contentType: "EXERCISES",
-      gradientStart: "#4A6FE1",
-      gradientEnd: "#2C3E8C",
-    },
-    {
-      title: "Recently Used",
-      iconType: "landscape",
-      count: 1,
-      contentType: "EXERCISES",
-      gradientStart: "#4A6FE1",
-      gradientEnd: "#00BCD4",
-    },
-  ];
-
-  // Create categories
-  const createdCategories = {};
-  for (const category of categories) {
-    const created = await prisma.selfCareCategory.create({
-      data: category,
-    });
-    createdCategories[category.title] = created;
-    console.log(`Created category: ${created.title}`);
-  }
-
-  // Create exercises
-  const defaultExercises = [
-    {
-      type: "Relaxing Exercises",
-      title: "Breathe in Calm",
-      duration: "7 min",
-      image: "https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?w=800&auto=format&fit=crop&q=60",
-      isLocked: false,
-      categoryId: createdCategories["Cope with Nightmares"].id,
-      content: "This exercise guides you through a deep breathing technique to calm your mind and body before sleep.",
-    },
-    {
-      type: "Mindfulness Exercise",
-      title: "Feeling Safe",
-      duration: "8 min",
-      image: "https://images.unsplash.com/photo-1528715471579-d1bcf0ba5e83?w=800&auto=format&fit=crop&q=60",
-      isLocked: true,
-      categoryId: createdCategories["Cope with Nightmares"].id,
-      content: "This guided meditation helps you create a mental safe space to retreat to when nightmares disturb your sleep.",
-    },
-    {
-      type: "Grounding Technique",
-      title: "Anchor Yourself",
-      duration: "9 min",
-      image: "https://images.unsplash.com/photo-1547104442-044448b73426?w=800&auto=format&fit=crop&q=60",
-      isLocked: true,
-      categoryId: createdCategories["For Deep Sleep"].id,
-      content: "Learn to use grounding techniques to prepare your mind and body for deep, restorative sleep.",
-    },
-    {
-      type: "Calming Breaths",
-      title: "Breathe Deeply",
-      duration: "4 min",
-      image: "https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?w=800&auto=format&fit=crop&q=60",
-      isLocked: true,
-      categoryId: createdCategories["For Deep Sleep"].id,
-      content: "A simple breathing exercise that slows your heart rate and prepares your body for deep sleep.",
-    },
-    {
-      type: "Relaxing Exercises",
-      title: "Soothe Your Mind",
-      duration: "5 min",
-      image: "https://images.unsplash.com/photo-1476611317561-60117649dd94?w=800&auto=format&fit=crop&q=60",
-      isLocked: true,
-      categoryId: createdCategories["Sleep Habit Pack"].id,
-      content: "A gentle guided meditation to quiet an overactive mind before bedtime.",
-    },
-  ];
-
-  for (const exercise of defaultExercises) {
-    await prisma.exercise.create({
-      data: exercise,
-    });
-    console.log(`Created exercise: ${exercise.title}`);
-  }
-
-  // Create audio tracks
-  const audioTracks = [
-    {
-      title: "Gentle Piano",
-      url: "https://file-examples.com/storage/fe8c7eef0c6364f6c9504cc/2017/11/file_example_MP3_700KB.mp3",
-      duration: "3 min",
-      categoryId: createdCategories["Sleep Sounds"].id,
-    },
-    {
-      title: "Relaxing Music",
-      url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
-      duration: "5 min",
-      categoryId: createdCategories["Sleep Sounds"].id,
-    },
-    {
-      title: "Nature Sounds",
-      url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
-      duration: "4 min",
-      categoryId: createdCategories["Sleep Sounds"].id,
-    },
-    {
-      title: "Meditation Tones",
-      url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
-      duration: "7 min",
-      categoryId: createdCategories["Sleep Sounds"].id,
-    },
-  ];
-
-  for (const audio of audioTracks) {
-    await prisma.audio.create({
-      data: audio,
-    });
-    console.log(`Created audio track: ${audio.title}`);
-  }
-
-  // Create some sample stories
-  const stories = [
-    {
-      title: "The Peaceful Forest",
-      content: "Once upon a time, in a peaceful forest far away from the hustle and bustle of city life, there lived a wise old owl...",
-      duration: "10 min",
-      image: "https://images.unsplash.com/photo-1448375240586-882707db888b?w=800&auto=format&fit=crop&q=60",
-      categoryId: createdCategories["Sleep Stories"].id,
-    },
-    {
-      title: "Ocean Waves",
-      content: "The gentle rhythm of ocean waves has a way of lulling us into tranquility. This story takes you on a journey along a peaceful shoreline...",
-      duration: "12 min",
-      image: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=60",
-      categoryId: createdCategories["Sleep Stories"].id,
-    },
-    {
-      title: "Mountain Journey",
-      content: "As you climb higher into the mountains, the air becomes crisp and clear. This story follows a peaceful trek through alpine meadows...",
-      duration: "15 min",
-      image: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&auto=format&fit=crop&q=60",
-      categoryId: createdCategories["Sleep Stories"].id,
-    },
-  ];
-
-  for (const story of stories) {
-    await prisma.story.create({
-      data: story,
-    });
-    console.log(`Created story: ${story.title}`);
-  }
-
-  console.log('Seeding completed successfully!');
-
-
-
   // Create domains and their questions
-  for (const domain of QUESTIONNAIRE_DOMAINS) {
+   for (const domain of QUESTIONNAIRE_DOMAINS) {
     const { questions, ...domainData } = domain;
     
-    try {
-      // Find existing domain
-      const existingDomain = await prisma.questionnaireDomain.findUnique({
-        where: { id: domainData.id },
-      });
-      
-      if (existingDomain) {
-        console.log(`Domain ${domainData.title} already exists, skipping creation`);
-        continue;
-      }
-      
-      // Create domain data object - just use the domain data directly
-      // Don't try to reference questionnaire which might not exist
-      const createdDomain = await prisma.questionnaireDomain.create({
-        data: domainData,
-      });
-      
-      console.log(`Created domain: ${createdDomain.title}`);
-      
-      // Create questions for this domain
-      for (const question of questions) {
-        try {
+    console.log(`Processing domain: ${domainData.title}`);
+    
+    // Process questions for domain regardless of whether domain already exists
+    for (const question of questions) {
+      try {
+        // Check if the question already exists
+        const existingQuestion = await prisma.question.findFirst({
+          where: {
+            questionId: question.questionId,
+            domainId: domain.id,
+          },
+        });
+        
+        if (existingQuestion) {
+          console.log(`Question ${question.questionId} already exists, skipping`);
+        } else {
+          // Create the question
           const createdQuestion = await prisma.question.create({
             data: {
               ...question,
-              domainId: createdDomain.id,
+              domainId: domain.id,
             },
           });
-          console.log(`Created question: ${createdQuestion.text.substring(0, 30)}...`);
-        } catch (error) {
-          console.log(`Error creating question ${question.questionId}: ${error.message}`);
+          console.log(`Created question: ${question.questionId}`);
         }
+      } catch (error) {
+        console.log(`Error processing question ${question.questionId}: ${error.message}`);
       }
-    } catch (error) {
-      console.log(`Error processing domain ${domainData.title}: ${error.message}`);
     }
   }
-
 
   console.log(`\nSeeding completed successfully!`);
 }
