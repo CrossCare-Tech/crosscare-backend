@@ -2491,7 +2491,7 @@ const checkAndAwardSnapshotBadge = async (patientId) => {
       badge = await prisma.badge.create({
         data: {
           type: BadgeType.SNAPSHOT,
-          title: "Snapshot",
+          title: "Snapshot Queen",
           description: "First time photo is uploaded",
         },
       });
