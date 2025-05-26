@@ -150,23 +150,28 @@ const uploadProfileImage = async (req, res) => {
     }
 };
 
+
 const updatePregnancyWeek = async (req, res) => {
-    try {
-      // Extract patient ID from the request parameters
-      const { id } = req.params;
-      
-      // Extract the pregnancy week from the request body
-      const { week } = req.body;
-      
-      // Validate the week input
-      if (week === undefined || week === null) {
-        return res.status(400).json({
-          success: false,
-          message: "Pregnancy week is required"
-        });
-      }
-      
-      // Ensure week is a number and within reasonable bounds (1-42 weeks)
+  try {
+    // Extract patient ID from the request parameters
+    const { id } = req.params;
+    
+    // Extract the pregnancy week and day from the request body
+    const { week, day } = req.body;
+    
+    // Validate that at least one field is provided
+    if (week === undefined && day === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one of pregnancy week or day is required"
+      });
+    }
+    
+    // Prepare update data object
+    const updateData = {};
+    
+    // Validate and add week if provided
+    if (week !== undefined && week !== null) {
       const weekNumber = parseInt(week);
       if (isNaN(weekNumber) || weekNumber < 1 || weekNumber > 42) {
         return res.status(400).json({
@@ -174,87 +179,104 @@ const updatePregnancyWeek = async (req, res) => {
           message: "Pregnancy week must be a number between 1 and 42"
         });
       }
-      
-      // Check if patient exists
-      const patient = await prisma.patient.findUnique({
-        where: { id }
-      });
-  
-      if (!patient) {
-        return res.status(404).json({
+      updateData.week = weekNumber;
+    }
+    
+    // Validate and add day if provided
+    if (day !== undefined && day !== null) {
+      const dayNumber = parseInt(day);
+      if (isNaN(dayNumber) || dayNumber < 1 || dayNumber >= 7) {
+        return res.status(400).json({
           success: false,
-          message: "Patient not found"
+          message: "Day must be a number between 1 and 7"
         });
       }
-      
-      // Update the patient's pregnancy week
-      const updatedPatient = await prisma.patient.update({
-        where: { id },
-        data: { week: weekNumber }
-      });
-      
-      // Return the updated patient data
-      return res.status(200).json({
-        success: true,
-        message: "Pregnancy week updated successfully",
-        data: {
-          id: updatedPatient.id,
-          name: updatedPatient.name,
-          week: updatedPatient.week
-        }
-      });
-      
-    } catch (error) {
-      console.error("Error updating pregnancy week:", error);
-      return res.status(500).json({
+      updateData.day = dayNumber;
+    }
+    
+    // Check if patient exists
+    const patient = await prisma.patient.findUnique({
+      where: { id }
+    });
+
+    if (!patient) {
+      return res.status(404).json({
         success: false,
-        message: "Failed to update pregnancy week",
-        error: error.message
+        message: "Patient not found"
       });
     }
+    
+    // Update the patient's pregnancy week and/or day
+    const updatedPatient = await prisma.patient.update({
+      where: { id },
+      data: updateData
+    });
+    
+    // Return the updated patient data
+    return res.status(200).json({
+      success: true,
+      message: "Pregnancy information updated successfully",
+      data: {
+        id: updatedPatient.id,
+        name: updatedPatient.name,
+        week: updatedPatient.week,
+        day: updatedPatient.day
+      }
+    });
+    
+  } catch (error) {
+    console.error("Error updating pregnancy information:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update pregnancy information",
+      error: error.message
+    });
+  }
 };
 
 const getPregnancyWeek = async (req, res) => {
-    try {
-      // Extract patient ID from the request parameters
-      const { id } = req.params;
-      
-      // Check if patient exists and get their data
-      const patient = await prisma.patient.findUnique({
-        where: { id },
-        select: {
-          id: true,
-          name: true,
-          week: true
-        }
-      });
-  
-      if (!patient) {
-        return res.status(404).json({
-          success: false,
-          message: "Patient not found"
-        });
+  try {
+    // Extract patient ID from the request parameters
+    const { id } = req.params;
+    
+    // Check if patient exists and get their data
+    const patient = await prisma.patient.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        week: true,
+        day: true
       }
-      
-      // Return the patient's pregnancy week
-      return res.status(200).json({
-        success: true,
-        data: {
-          id: patient.id,
-          name: patient.name,
-          week: patient.week || null
-        }
-      });
-      
-    } catch (error) {
-      console.error("Error getting pregnancy week:", error);
-      return res.status(500).json({
+    });
+
+    if (!patient) {
+      return res.status(404).json({
         success: false,
-        message: "Failed to get pregnancy week",
-        error: error.message
+        message: "Patient not found"
       });
     }
-  };
+    
+    // Return the patient's pregnancy week and day
+    return res.status(200).json({
+      success: true,
+      data: {
+        id: patient.id,
+        name: patient.name,
+        week: patient.week || null,
+        day: patient.day || null
+      }
+    });
+    
+  } catch (error) {
+    console.error("Error getting pregnancy information:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get pregnancy information",
+      error: error.message
+    });
+  }
+};
 
   const updateProfile = async (req, res) => {
     try {

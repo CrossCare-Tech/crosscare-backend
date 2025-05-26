@@ -18,11 +18,12 @@ model Patient {
   profileImage     String?       @map("profile_image")
   avatarUrl    String?           @map("avatar_url")
   week       Int?
+  day        Int?
   doctorId   String?
   activities PatientActivity[]
   questionResponses  QuestionResponse[]
   questionnaires     Questionnaire[]
-  patientBadges PatientBadge[]
+  patientBadges PatientBadge[] @relation("PatientToBadge")
   habitBadges   HabitBadge[]
 }
 
@@ -56,6 +57,7 @@ enum BadgeType {
   MAMA_MILESTONE_V
   MAMA_MILESTONE_VI
   TRIVIA_QUEEN
+  GETTING_TO_KNOW_YOU
   WATER_WIZARD
   WATER_WIZARD_I
   WATER_WIZARD_II
@@ -115,7 +117,7 @@ model PatientBadge {
   badgeId   String
   awardedAt DateTime @default(now())
 
-  patient   Patient @relation(fields: [patientId], references: [id])
+  patient   Patient  @relation("PatientToBadge", fields: [patientId], references: [id], onDelete: Cascade)
   badge     Badge   @relation(fields: [badgeId], references: [id])
 
   @@unique([patientId, badgeId])
@@ -154,7 +156,7 @@ model PatientActivity {
   medications Medication[]
   noteTaking  NoteTaking[]
   wombPictures WombPicture[] // New relation
-  patient     Patient      @relation(fields: [patientId], references: [id])
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
 }
 
 model WombPicture {
