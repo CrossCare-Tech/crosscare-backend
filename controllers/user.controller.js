@@ -185,7 +185,8 @@ const updatePregnancyWeek = async (req, res) => {
     // Validate and add day if provided
     if (day !== undefined && day !== null) {
       const dayNumber = parseInt(day);
-      if (isNaN(dayNumber) || dayNumber < 1 || dayNumber > 8) {
+      console.log('Day validation:', { day, dayNumber, isNaN: isNaN(dayNumber) });
+      if (isNaN(dayNumber) || dayNumber < 1 || dayNumber > 7) {
         return res.status(400).json({
           success: false,
           message: "Day must be a number between 1 and 7"
