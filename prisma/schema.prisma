@@ -25,6 +25,7 @@ model Patient {
   questionnaires     Questionnaire[]
   patientBadges PatientBadge[] @relation("PatientToBadge")
   habitBadges   HabitBadge[]
+  savedMealTemplates SavedMealTemplate[]
 }
 
 model Doctor {
@@ -101,6 +102,18 @@ enum BadgeType {
   HOT_MAMA
 }
 
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
+
+enum FoodClassification {
+  GOOD
+  BAD
+}
+
 model Badge {
   id          String      @id @default(uuid())
   type        BadgeType   @unique
@@ -150,6 +163,12 @@ model PatientActivity {
   heart_rate  Float?
   notetaking  String?
   wombPicture String?
+
+  calorieGoal     Int?             // Daily calorie goal
+  caloriesConsumed Int?            // Total calories consumed
+  goodFoodCount   Int?             // Count of good foods
+  badFoodCount    Int?         
+
   waterGoal   Int?
   stepsGoal   Int?
   meal        Meals[]
@@ -180,12 +199,104 @@ model NoteTaking{
 }
 
 model Meals {
-  mealId            String          @id @default(uuid())
-  name              String
-  patientActivityId String          @map("user_activity_id")
-  patientActivity   PatientActivity @relation(fields: [patientActivityId], references: [id])
+  id                String          @id @default(uuid())
+  patientActivityId String
+  mealType          MealType
+  totalCalories     Int             
+  foodItemsCount    Int            
+  isSavedAsMeal     Boolean         
+  savedMealName     String?         // Custom name when saved
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  
+  // Relations
+  patientActivity   PatientActivity @relation(fields: [patientActivityId], references: [id], onDelete: Cascade)
+  foodItems         FoodItem[]
+  
+  @@unique([patientActivityId, mealType]) // One meal per type per day
+  @@map("meal")
+}
 
-  @@unique([patientActivityId, mealId])
+model FoodItem {
+  id              String              @id @default(uuid())
+  dailyMealId     String
+  name            String              // e.g., "Coffee", "Tea", "Apple"
+  portion         String              // e.g., "1 Tea cup", "1 Small (2-3/4" dia)"
+  calories        Int                  // e.g., 133
+  classification  FoodClassification  // GOOD or BAD only
+  
+  // Additional nutrition info (optional)
+  protein         Float?              // in grams
+  carbohydrates   Float?              // in grams
+  fat             Float?              // in grams
+  
+  // Metadata
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  
+  // Relations
+  Meals       Meals           @relation(fields: [dailyMealId], references: [id], onDelete: Cascade)
+  
+  @@map("food_items")
+}
+
+model SavedMealTemplate {
+  id          String              @id @default(uuid())
+  patientId   String
+  name        String             
+  mealType    MealType
+  description String?
+  totalCalories Int              
+  isPublic    Boolean            
+  usageCount  Int                     // How many times used
+  
+  // Template food items
+  templateItems SavedMealItem[]
+  
+  // Metadata
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  
+  // Relations
+  patient     Patient             @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  @@map("saved_meal_templates")
+}
+
+// Food items in saved meal templates
+model SavedMealItem {
+  id              String              @id @default(uuid())
+  savedMealId     String
+  name            String
+  portion         String
+  calories        Int                 
+  classification  FoodClassification 
+  
+  // Relations
+  savedMeal       SavedMealTemplate   @relation(fields: [savedMealId], references: [id], onDelete: Cascade)
+  
+  @@map("saved_meal_items")
+}
+
+// Food database for quick selection and calorie lookup
+model FoodDatabase {
+  id              String              @id @default(uuid())
+  name            String              @unique
+  commonPortions  Json                // Array of common portions: [{"portion": "1 cup", "calories": 133}, {"portion": "1 tea cup", "calories": 100}]
+  classification  FoodClassification  
+  
+  // Base nutrition per 100g for calculations
+  caloriesPer100g Int
+  protein         Float?
+  carbohydrates   Float?
+  fat             Float?
+  
+  // Metadata
+  isVerified      Boolean             
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  
+  @@map("food_database")
 }
 
 model MedicalDocs {

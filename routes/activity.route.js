@@ -57,4 +57,10 @@ router.post(
   
   // Delete a journal entry
 
+//food log
+
+router.post('/user/activity/:id/caloriesGoal', activityController.caloriesGoal);
+router.post('/user/activity/:id/foodItem', activityController.addMeals);
+router.get('/user/activity/:id/foodItem', activityController.getMeals);
+
 export default router;

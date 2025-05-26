@@ -124,6 +124,10 @@ const findOrCreateActivity = async (patientId) => {
               stepsGoal: patient.stepsGoal || 0, // Default to 5000 steps if not set
               heart_rate: 0,
               weight: null,
+              calorieGoal: patient.calorieGoal || 0,
+              caloriesConsumed: 0,
+              goodFoodCount: 0,
+              badFoodCount: 0,
               weight_unit: "kg",
           },
       });
@@ -3140,6 +3144,216 @@ const updateJournalEntry = async (req, res) => {
 };
 
 
+//food Log Entry
+const caloriesGoal = async (req, res) => {
+  console.log("🔵 Received request to update calorie goal");
+
+  const { id } = req.params;
+  const { calorieGoal } = req.body;
+
+  console.log("🟡 Patient ID:", id);
+  console.log("🟡 Calorie Goal received:", calorieGoal);
+
+  if (!calorieGoal || isNaN(calorieGoal)) {
+    console.error("❌ Invalid calorie goal received:", calorieGoal);
+    return res.status(400).json({ message: "Invalid calorie goal value. Must be a number." });
+  }
+
+  try {
+    const patient = await prisma.patient.findUnique({ where: { id: String(id) } });
+
+    if (!patient) {
+      console.error("❌ Patient not found for ID:", id);
+      return res.status(400).json({ message: "Patient not found." });
+    }
+
+    const activity = await findOrCreateActivity(id);
+
+    if (!activity || !activity.id) {
+      console.error("❌ Activity creation failed for patient:", id);
+      return res.status(500).json({ message: "Error finding or creating patient activity." });
+    }
+
+    const updatedActivity = await prisma.patientActivity.update({
+      where: { id: activity.id },
+      data: { calorieGoal: parseInt(calorieGoal) },
+    });
+
+    console.log("✅ Calorie goal updated successfully:", updatedActivity.calorieGoal);
+    console.log("🎯 Today's Calorie Goal:", updatedActivity.calorieGoal, "calories");
+    
+    res.status(200).json(updatedActivity);
+  } catch (error) {
+    console.error("❌ Error updating calorie goal:", error);
+    res.status(500).json({ message: "Error updating calorie goal", error: error.message });
+  }
+};
+
+const addMeals = async(req,res)=>{
+    console.log("🔵 Received request to add food item");
+  
+    const { id: patientId } = req.params;
+
+    console.log(patientId);
+  try {
+    const { mealType, name, portion, calories, classification } = req.body;
+
+    console.log("🟡 Patient ID:", patientId);
+    console.log("🟡 Adding food:", { name, portion, calories, classification });
+
+    // Get or create activity
+    const activity = await findOrCreateActivity(patientId);
+
+    // Simple food addition
+    const result = await prisma.$transaction(async (tx) => {
+  console.log("tx keys:", Object.keys(tx)); // Should include 'meals', not 'meal'
+
+  let meal = await tx.meals.findUnique({
+    where: {
+      patientActivityId_mealType: {
+        patientActivityId: activity.id,
+        mealType: (mealType || 'BREAKFAST').toUpperCase(),
+      }
+    }
+  });
+
+  if (!meal) {
+    meal = await tx.meals.create({
+      data: {
+        patientActivityId: activity.id,
+        mealType: (mealType || 'BREAKFAST').toUpperCase(),
+        totalCalories: 0,
+        foodItemsCount: 0,
+        isSavedAsMeal: false
+      }
+    });
+  }
+
+  const foodItem = await tx.foodItem.create({
+    data: {
+      dailyMealId: meal.id,  // Ensure your field name in FoodItem is dailyMealId, else fix accordingly
+      name,
+      portion,
+      calories: parseInt(calories) || 0,
+      classification: classification || 'GOOD'
+    }
+  });
+
+  await tx.meals.update({
+    where: { id: meal.id },
+    data: {
+      totalCalories: { increment: parseInt(calories) || 0 },
+      foodItemsCount: { increment: 1 },
+    }
+  });
+
+  const goodIncrement = (classification === 'GOOD') ? 1 : 0;
+  const badIncrement = (classification === 'BAD') ? 1 : 0;
+
+  const updatedActivity = await tx.patientActivity.update({
+    where: { id: activity.id },
+    data: {
+      caloriesConsumed: { increment: parseInt(calories) || 0 },
+      goodFoodCount: { increment: goodIncrement },
+      badFoodCount: { increment: badIncrement }
+    }
+  });
+
+  return { foodItem, updatedActivity };
+});
+
+    console.log("✅ Food added successfully:", result.foodItem.name);
+    console.log("🎯 Total calories consumed:", result.updatedActivity.caloriesConsumed);
+
+    res.status(200).json({
+      success: true,
+      foodItem: result.foodItem,
+      dailyProgress: {
+        caloriesConsumed: result.updatedActivity.caloriesConsumed,
+        calorieGoal: result.updatedActivity.calorieGoal,
+        goodFoodCount: result.updatedActivity.goodFoodCount,
+        badFoodCount: result.updatedActivity.badFoodCount
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ Error adding food item:", error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+}
+
+const getMeals = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+
+    // Fetch all activities for this patient
+    const activities = await prisma.patientActivity.findMany({
+      where: { patientId },
+      select: { id: true, calorieGoal: true, caloriesConsumed: true, goodFoodCount: true, badFoodCount: true },
+    });
+
+    if (activities.length === 0) {
+      return res.status(404).json({ success: false, error: 'No activities found for patient' });
+    }
+
+    // Collect all activity IDs
+    const activityIds = activities.map(a => a.id);
+
+    // Fetch all meals for all activities
+    const meals = await prisma.meals.findMany({
+      where: { patientActivityId: { in: activityIds } },
+      include: {
+        foodItems: {
+          select: {
+            id: true,
+            name: true,
+            portion: true,
+            calories: true,
+            classification: true,
+          },
+        },
+      },
+      orderBy: { mealType: 'asc' },
+    });
+
+    // Group meals by mealType
+    const groupedMeals = {
+      BREAKFAST: [],
+      LUNCH: [],
+      DINNER: [],
+      SNACK: [],
+    };
+
+    for (const meal of meals) {
+      const key = meal.mealType.toUpperCase();
+      if (!groupedMeals[key]) groupedMeals[key] = [];
+      groupedMeals[key].push(meal);
+    }
+
+    // Aggregate calorieGoal, caloriesConsumed, goodFoodCount, badFoodCount across all activities
+    const calorieGoal = activities.reduce((sum, a) => sum + (a.calorieGoal || 0), 0);
+    const caloriesConsumed = activities.reduce((sum, a) => sum + (a.caloriesConsumed || 0), 0);
+    const goodFoodCount = activities.reduce((sum, a) => sum + (a.goodFoodCount || 0), 0);
+    const badFoodCount = activities.reduce((sum, a) => sum + (a.badFoodCount || 0), 0);
+
+    res.status(200).json({
+      success: true,
+      calorieGoal,
+      caloriesConsumed,
+      goodFoodCount,
+      badFoodCount,
+      meals: groupedMeals,
+    });
+  } catch (error) {
+    console.error('Error fetching meals:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+
 
 export default {
     getUserActivities,
@@ -3166,5 +3380,8 @@ export default {
     getJournalEntries,
     getJournalEntry,
     upload,
-    updateJournalEntry
+    updateJournalEntry,
+    caloriesGoal,
+    addMeals,
+    getMeals
 };
