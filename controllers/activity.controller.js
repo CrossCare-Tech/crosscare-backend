@@ -3292,78 +3292,78 @@ const getCalorieHistory = async (req, res) => {
   }
 };
 
-const addMeals = async(req,res)=>{
-    console.log("🔵 Received request to add food item");
+const addMeals = async (req, res) => {
+  console.log("🔵 Received request to add food item");
   
-    const { id: patientId } = req.params;
-
-    console.log(patientId);
+  const { id: patientId } = req.params;
+  console.log(patientId);
+  
   try {
     const { mealType, name, portion, calories, classification } = req.body;
 
     console.log("🟡 Patient ID:", patientId);
     console.log("🟡 Adding food:", { name, portion, calories, classification });
 
-    // Get or create activity
+    // Get or create activity for today (or you could accept a date parameter)
     const activity = await findOrCreateActivity(patientId);
 
     // Simple food addition
     const result = await prisma.$transaction(async (tx) => {
-  console.log("tx keys:", Object.keys(tx)); // Should include 'meals', not 'meal'
+      console.log("tx keys:", Object.keys(tx));
 
-  let meal = await tx.meals.findUnique({
-    where: {
-      patientActivityId_mealType: {
-        patientActivityId: activity.id,
-        mealType: (mealType || 'BREAKFAST').toUpperCase(),
-      }
-    }
-  });
+      let meal = await tx.meals.findUnique({
+        where: {
+          patientActivityId_mealType: {
+            patientActivityId: activity.id,
+            mealType: (mealType || 'BREAKFAST').toUpperCase(),
+          }
+        }
+      });
 
-  if (!meal) {
-    meal = await tx.meals.create({
-      data: {
-        patientActivityId: activity.id,
-        mealType: (mealType || 'BREAKFAST').toUpperCase(),
-        totalCalories: 0,
-        foodItemsCount: 0,
-        isSavedAsMeal: false
+      if (!meal) {
+        meal = await tx.meals.create({
+          data: {
+            patientActivityId: activity.id,
+            mealType: (mealType || 'BREAKFAST').toUpperCase(),
+            totalCalories: 0,
+            foodItemsCount: 0,
+            isSavedAsMeal: false
+          }
+        });
       }
+
+      const foodItem = await tx.foodItem.create({
+        data: {
+          dailyMealId: meal.id,
+          name,
+          portion,
+          calories: parseInt(calories) || 0,
+          classification: classification || 'GOOD'
+        }
+      });
+
+      await tx.meals.update({
+        where: { id: meal.id },
+        data: {
+          totalCalories: { increment: parseInt(calories) || 0 },
+          foodItemsCount: { increment: 1 },
+        }
+      });
+
+      const goodIncrement = (classification === 'GOOD') ? 1 : 0;
+      const badIncrement = (classification === 'BAD') ? 1 : 0;
+
+      const updatedActivity = await tx.patientActivity.update({
+        where: { id: activity.id },
+        data: {
+          caloriesConsumed: { increment: parseInt(calories) || 0 },
+          goodFoodCount: { increment: goodIncrement },
+          badFoodCount: { increment: badIncrement }
+        }
+      });
+
+      return { foodItem, updatedActivity, mealId: meal.id };
     });
-  }
-
-  const foodItem = await tx.foodItem.create({
-    data: {
-      dailyMealId: meal.id,  // Ensure your field name in FoodItem is dailyMealId, else fix accordingly
-      name,
-      portion,
-      calories: parseInt(calories) || 0,
-      classification: classification || 'GOOD'
-    }
-  });
-
-  await tx.meals.update({
-    where: { id: meal.id },
-    data: {
-      totalCalories: { increment: parseInt(calories) || 0 },
-      foodItemsCount: { increment: 1 },
-    }
-  });
-
-  const goodIncrement = (classification === 'GOOD') ? 1 : 0;
-  const badIncrement = (classification === 'BAD') ? 1 : 0;
-
-  const updatedActivity = await tx.patientActivity.update({
-    where: { id: activity.id },
-    data: {
-      caloriesConsumed: { increment: parseInt(calories) || 0 },
-      goodFoodCount: { increment: goodIncrement },
-      badFoodCount: { increment: badIncrement }
-    }
-  });
-
-  return { foodItem, updatedActivity };
-});
 
     console.log("✅ Food added successfully:", result.foodItem.name);
     console.log("🎯 Total calories consumed:", result.updatedActivity.caloriesConsumed);
@@ -3371,6 +3371,7 @@ const addMeals = async(req,res)=>{
     res.status(200).json({
       success: true,
       foodItem: result.foodItem,
+      mealId: result.mealId, // Include mealId for frontend reference
       dailyProgress: {
         caloriesConsumed: result.updatedActivity.caloriesConsumed,
         calorieGoal: result.updatedActivity.calorieGoal,
@@ -3390,23 +3391,64 @@ const addMeals = async(req,res)=>{
 
 const getMeals = async (req, res) => {
   try {
-
     const { id } = req.params;
+    const { date } = req.query; // Get the optional date parameter
+    
     console.log("🟡 I'm being called", id);
-    // Fetch all activities for this patient
+    console.log("🟡 Date filter:", date);
+
+    let whereClause = { patientId: id };
+    
+    // If date is provided, filter by that specific date
+    if (date) {
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      whereClause.date = {
+        gte: startOfDay,
+        lte: endOfDay
+      };
+      
+      console.log("🟡 Filtering by date range:", startOfDay, "to", endOfDay);
+    }
+
+    // Fetch activities for this patient (filtered by date if provided)
     const activities = await prisma.patientActivity.findMany({
-      where: { patientId: id },
-      select: { id: true, calorieGoal: true, caloriesConsumed: true, goodFoodCount: true, badFoodCount: true },
+      where: whereClause,
+      select: { 
+        id: true, 
+        calorieGoal: true, 
+        caloriesConsumed: true, 
+        goodFoodCount: true, 
+        badFoodCount: true,
+        date: true 
+      },
     });
 
     if (activities.length === 0) {
-      return res.status(404).json({ success: false, error: 'No activities found for patient' });
+      // If no activities found for the specific date, return empty structure
+      return res.status(200).json({
+        success: true,
+        calorieGoal: 0,
+        caloriesConsumed: 0,
+        goodFoodCount: 0,
+        badFoodCount: 0,
+        meals: {
+          BREAKFAST: [],
+          LUNCH: [],
+          DINNER: [],
+          SNACK: [],
+        },
+      });
     }
 
     // Collect all activity IDs
     const activityIds = activities.map(a => a.id);
 
-    // Fetch all meals for all activities
+    // Fetch all meals for the filtered activities
     const meals = await prisma.meals.findMany({
       where: { patientActivityId: { in: activityIds } },
       include: {
@@ -3437,11 +3479,14 @@ const getMeals = async (req, res) => {
       groupedMeals[key].push(meal);
     }
 
-    // Aggregate calorieGoal, caloriesConsumed, goodFoodCount, badFoodCount across all activities
+    // Aggregate data across filtered activities
     const calorieGoal = activities.reduce((sum, a) => sum + (a.calorieGoal || 0), 0);
     const caloriesConsumed = activities.reduce((sum, a) => sum + (a.caloriesConsumed || 0), 0);
     const goodFoodCount = activities.reduce((sum, a) => sum + (a.goodFoodCount || 0), 0);
     const badFoodCount = activities.reduce((sum, a) => sum + (a.badFoodCount || 0), 0);
+
+    console.log("✅ Meals fetched successfully for date:", date || "all dates");
+    console.log("🎯 Found", activities.length, "activities with", meals.length, "meals");
 
     res.status(200).json({
       success: true,
