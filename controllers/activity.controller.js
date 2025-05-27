@@ -3287,11 +3287,12 @@ const addMeals = async(req,res)=>{
 
 const getMeals = async (req, res) => {
   try {
-    const { patientId } = req.params;
 
+    const { id } = req.params;
+    console.log("🟡 I'm being called", id);
     // Fetch all activities for this patient
     const activities = await prisma.patientActivity.findMany({
-      where: { patientId },
+      where: { patientId: id },
       select: { id: true, calorieGoal: true, caloriesConsumed: true, goodFoodCount: true, badFoodCount: true },
     });
 
