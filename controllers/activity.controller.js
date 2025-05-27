@@ -3189,6 +3189,109 @@ const caloriesGoal = async (req, res) => {
   }
 };
 
+// Add this new endpoint to your backend
+const getCalorieHistory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { timeRange = 'week' } = req.query; // week, month, lastMonth, today
+    
+    // Calculate date range based on timeRange
+    let startDate, endDate;
+    const now = new Date();
+    
+    switch (timeRange) {
+      case 'today':
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+        break;
+      case 'week':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        endDate = now;
+        break;
+      case 'month':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        break;
+      case 'lastMonth':
+        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        endDate = new Date(now.getFullYear(), now.getMonth(), 0);
+        break;
+      default:
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        endDate = now;
+    }
+
+    // Fetch all activities for this patient within date range
+    const activities = await prisma.patientActivity.findMany({
+      where: { 
+        patientId: id,
+        date: {
+          gte: startDate,
+          lte: endDate
+        }
+      },
+      select: { 
+        id: true, 
+        calorieGoal: true, 
+        caloriesConsumed: true, 
+        date: true
+      },
+    });
+
+    // Fetch all meals for these activities
+    const activityIds = activities.map(a => a.id);
+    const meals = await prisma.meals.findMany({
+      where: { 
+        patientActivityId: { in: activityIds },
+        createdAt: {
+          gte: startDate,
+          lte: endDate
+        }
+      },
+      select: {
+        totalCalories: true,
+        createdAt: true,
+        patientActivityId: true
+      }
+    });
+
+    // Group calories by date
+    const dailyCalories = {};
+    
+    // Initialize all dates in range with 0 calories
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      const dateKey = d.toISOString().split('T')[0];
+      dailyCalories[dateKey] = 0;
+    }
+    
+    // Add actual calorie data
+    meals.forEach(meal => {
+      const dateKey = meal.createdAt.toISOString().split('T')[0];
+      if (dailyCalories[dateKey] !== undefined) {
+        dailyCalories[dateKey] += meal.totalCalories;
+      }
+    });
+
+    // Convert to array format for frontend
+    const chartData = Object.keys(dailyCalories).map(date => ({
+      date,
+      calories: dailyCalories[date],
+      day: new Date(date).toLocaleDateString('en-US', { weekday: 'short' }).charAt(0)
+    }));
+
+    res.status(200).json({
+      success: true,
+      timeRange,
+      chartData,
+      totalDays: chartData.length
+    });
+
+  } catch (error) {
+    console.error('Error fetching calorie history:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 const addMeals = async(req,res)=>{
     console.log("🔵 Received request to add food item");
   
@@ -3384,5 +3487,6 @@ export default {
     updateJournalEntry,
     caloriesGoal,
     addMeals,
-    getMeals
+    getMeals,
+    getCalorieHistory
 };
