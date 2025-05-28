@@ -3143,13 +3143,51 @@ const updateJournalEntry = async (req, res) => {
   }
 };
 
+const findOrCreateActivityForDate = async (patientId, targetDate) => {
+  // Set to start of day for consistent date comparison
+  const startOfDay = new Date(targetDate);
+  startOfDay.setHours(0, 0, 0, 0);
+  
+  const endOfDay = new Date(targetDate);
+  endOfDay.setHours(23, 59, 59, 999);
+
+  // Try to find existing activity for this date
+  let activity = await prisma.patientActivity.findFirst({
+    where: {
+      patientId: patientId,
+      date: {
+        gte: startOfDay,
+        lte: endOfDay
+      }
+    }
+  });
+
+  // If no activity exists for this date, create one
+  if (!activity) {
+    activity = await prisma.patientActivity.create({
+      data: {
+        patientId: patientId,
+        date: startOfDay, // Use start of day as the date
+        calorieGoal: 2000, // Default calorie goal
+        caloriesConsumed: 0,
+        goodFoodCount: 0,
+        badFoodCount: 0
+      }
+    });
+    
+    console.log("✅ Created new activity for date:", startOfDay.toISOString().split('T')[0]);
+  }
+
+  return activity;
+};
+
 
 //food Log Entry
 const caloriesGoal = async (req, res) => {
   console.log("🔵 Received request to update calorie goal");
 
   const { id } = req.params;
-  const { calorieGoal } = req.body;
+  const { calorieGoal, date } = req.body;
 
   console.log("🟡 Patient ID:", id);
   console.log("🟡 Calorie Goal received:", calorieGoal);
@@ -3167,7 +3205,8 @@ const caloriesGoal = async (req, res) => {
       return res.status(400).json({ message: "Patient not found." });
     }
 
-    const activity = await findOrCreateActivity(id);
+    const targetDate = date ? new Date(date) : new Date();
+    const activity = await findOrCreateActivityForDate(id, targetDate);
 
     if (!activity || !activity.id) {
       console.error("❌ Activity creation failed for patient:", id);
@@ -3182,7 +3221,11 @@ const caloriesGoal = async (req, res) => {
     console.log("✅ Calorie goal updated successfully:", updatedActivity.calorieGoal);
     console.log("🎯 Today's Calorie Goal:", updatedActivity.calorieGoal, "calories");
     
-    res.status(200).json(updatedActivity);
+    res.status(200).json({
+      success: true,
+      calorieGoal: updatedActivity.calorieGoal,
+      date: targetDate.toISOString().split('T')[0]
+    });
   } catch (error) {
     console.error("❌ Error updating calorie goal:", error);
     res.status(500).json({ message: "Error updating calorie goal", error: error.message });
@@ -3299,13 +3342,14 @@ const addMeals = async (req, res) => {
   console.log(patientId);
   
   try {
-    const { mealType, name, portion, calories, classification } = req.body;
+    const { mealType, name, portion, calories, classification, date } = req.body;
 
     console.log("🟡 Patient ID:", patientId);
     console.log("🟡 Adding food:", { name, portion, calories, classification });
 
     // Get or create activity for today (or you could accept a date parameter)
-    const activity = await findOrCreateActivity(patientId);
+    const targetDate = date ? new Date(date) : new Date();
+    const activity = await findOrCreateActivityForDate(patientId, targetDate);
 
     // Simple food addition
     const result = await prisma.$transaction(async (tx) => {
