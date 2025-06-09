@@ -63,5 +63,9 @@ router.post('/user/activity/:id/caloriesGoal', activityController.caloriesGoal);
 router.post('/user/activity/:id/foodItem', activityController.addMeals);
 router.get('/user/activity/:id/foodItem', activityController.getMeals);
 router.get('/user/activity/:id/calorieHistory', activityController.getCalorieHistory);
+router.post('/user/activity/:id/appointment', activityController.createAppointment);
+router.get('/user/activity/:id/appointments', activityController.getPatientAppointments);
+router.put('/user/activity/:id/appointments/:appointmentId', activityController.updateAppointment);
+router.delete('/user/activity/:id/appointments/:appointmentId', activityController.deleteAppointment);
 
 export default router;

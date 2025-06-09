@@ -3546,6 +3546,219 @@ const getMeals = async (req, res) => {
   }
 };
 
+const createAppointment = async (req, res) => {
+  try {
+    const { id: patientId } = req.params;
+    const { title, appointmentDate } = req.body;
+
+    console.log("🔵 Received request to create appointment");
+    console.log("🟡 Patient ID:", patientId);
+    console.log("🟡 Appointment details:", { title, appointmentDate });
+
+    // Validate required fields
+    if (!title || !appointmentDate) {
+      console.error("❌ Missing required fields");
+      return res.status(400).json({
+        success: false,
+        message: "Title and appointment date are required"
+      });
+    }
+
+    // Check if patient exists
+    const patient = await prisma.patient.findUnique({
+      where: { id: patientId }
+    });
+
+    if (!patient) {
+      console.error("❌ Patient not found for ID:", patientId);
+      return res.status(404).json({
+        success: false,
+        message: "Patient not found"
+      });
+    }
+
+    // Create the appointment
+    const appointment = await prisma.appointment.create({
+      data: {
+        patientId,
+        title,
+        appointmentDate: new Date(appointmentDate),
+      }
+    });
+
+    console.log("✅ Appointment created successfully:", appointment.id);
+    
+    return res.status(201).json({
+      success: true,
+      message: "Appointment created successfully",
+      data: appointment
+    });
+  } catch (error) {
+    console.error("❌ Error creating appointment:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to create appointment",
+      error: error.message
+    });
+  }
+};
+
+// Update an existing appointment
+const updateAppointment = async (req, res) => {
+  try {
+    const { id: patientId, appointmentId } = req.params;
+    const { title, appointmentDate } = req.body;
+
+    console.log("🔵 Received request to update appointment");
+    console.log("🟡 Patient ID:", patientId);
+    console.log("🟡 Appointment ID:", appointmentId);
+    console.log("🟡 Updated details:", { title, appointmentDate });
+
+    // Validate that at least one field is provided
+    if (!appointmentDate) {
+      console.error("❌ No fields to update provided");
+      return res.status(400).json({
+        success: false,
+        message: "At least one field (title or appointmentDate) must be provided"
+      });
+    }
+
+    // Check if appointment exists and belongs to this patient
+    const appointment = await prisma.appointment.findFirst({
+      where: {
+        id: appointmentId,
+        patientId
+      }
+    });
+
+    if (!appointment) {
+      console.error("❌ Appointment not found or doesn't belong to patient");
+      return res.status(404).json({
+        success: false,
+        message: "Appointment not found or doesn't belong to this patient"
+      });
+    }
+
+    // Prepare update data
+    const updateData = {};
+    if (title) updateData.title = title;
+    if (appointmentDate) updateData.appointmentDate = new Date(appointmentDate);
+
+    // Update the appointment
+    const updatedAppointment = await prisma.appointment.update({
+      where: { id: appointmentId },
+      data: updateData
+    });
+
+    console.log("✅ Appointment updated successfully:", updatedAppointment.id);
+
+    return res.status(200).json({
+      success: true,
+      message: "Appointment updated successfully",
+      data: updatedAppointment
+    });
+  } catch (error) {
+    console.error("❌ Error updating appointment:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update appointment",
+      error: error.message
+    });
+  }
+};
+
+// Delete an appointment
+const deleteAppointment = async (req, res) => {
+  try {
+    const { id: patientId, appointmentId } = req.params;
+
+    console.log("🔵 Received request to delete appointment");
+    console.log("🟡 Patient ID:", patientId);
+    console.log("🟡 Appointment ID:", appointmentId);
+
+    // Check if appointment exists and belongs to this patient
+    const appointment = await prisma.appointment.findFirst({
+      where: {
+        id: appointmentId,
+        patientId
+      }
+    });
+
+    if (!appointment) {
+      console.error("❌ Appointment not found or doesn't belong to patient");
+      return res.status(404).json({
+        success: false,
+        message: "Appointment not found or doesn't belong to this patient"
+      });
+    }
+
+    // Delete the appointment
+    await prisma.appointment.delete({
+      where: { id: appointmentId }
+    });
+
+    console.log("✅ Appointment deleted successfully:", appointmentId);
+
+    return res.status(200).json({
+      success: true,
+      message: "Appointment deleted successfully"
+    });
+  } catch (error) {
+    console.error("❌ Error deleting appointment:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete appointment",
+      error: error.message
+    });
+  }
+};
+
+// Get all appointments for a patient
+const getPatientAppointments = async (req, res) => {
+  try {
+    const { id: patientId } = req.params;
+    
+    console.log("🔵 Received request to fetch appointments");
+    console.log("🟡 Patient ID:", patientId);
+
+    // Check if patient exists
+    const patient = await prisma.patient.findUnique({
+      where: { id: patientId }
+    });
+
+    if (!patient) {
+      console.error("❌ Patient not found for ID:", patientId);
+      return res.status(404).json({
+        success: false,
+        message: "Patient not found"
+      });
+    }
+
+    // Get all appointments for this patient
+    const appointments = await prisma.appointment.findMany({
+      where: { patientId },
+      orderBy: { appointmentDate: 'asc' }
+    });
+
+    console.log(`✅ Found ${appointments.length} appointments for patient`);
+
+    // Format appointments for frontend
+    const formattedAppointments = appointments.map(appointment => ({
+      id: appointment.id,
+      title: appointment.title,
+      date: appointment.appointmentDate.toISOString(),
+    }));
+
+    return res.status(200).json(formattedAppointments);
+  } catch (error) {
+    console.error("❌ Error fetching appointments:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch appointments",
+      error: error.message
+    });
+  }
+};
 
 
 export default {
@@ -3577,5 +3790,9 @@ export default {
     caloriesGoal,
     addMeals,
     getMeals,
-    getCalorieHistory
+    getCalorieHistory,
+    createAppointment,
+    getPatientAppointments,
+    updateAppointment,
+    deleteAppointment
 };

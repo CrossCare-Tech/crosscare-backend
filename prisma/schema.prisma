@@ -26,6 +26,7 @@ model Patient {
   patientBadges PatientBadge[] @relation("PatientToBadge")
   habitBadges   HabitBadge[]
   savedMealTemplates SavedMealTemplate[]
+  appointments Appointment[]
 }
 
 model Doctor {
@@ -439,4 +440,16 @@ model Questionnaire {
   isPaused       Boolean            @default(false)
   isCompleted    Boolean            @default(false)
   responses      QuestionResponse[]
+}
+
+model Appointment {
+  id          String      @id @default(uuid())
+  patientId   String
+  title       String      // This will store the description
+  appointmentDate DateTime // This will store the combined date and time
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  // Relations
+  patient     Patient     @relation(fields: [patientId], references: [id], onDelete: Cascade)
 }
