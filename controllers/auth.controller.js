@@ -69,14 +69,37 @@ const login = async (req, res) => {
 // Signup function, where the user needs to provide a username, email, and password
 const signup = async (req, res) => {
     try {
-        const { name, email, password } = req.body;
+        const { firstName, lastName, dateOfBirth, email, password, name } = req.body;
+
+        // Support both new format (firstName, lastName, dateOfBirth) and old format (name)
+        let fullName = name;
+        let age = null;
+
+        if (firstName && lastName) {
+            fullName = `${firstName.trim()} ${lastName.trim()}`;
+        }
+
+        if (dateOfBirth) {
+            const birthDate = new Date(dateOfBirth);
+            const today = new Date();
+            age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                age = age - 1;
+            }
+        }
+
+        if (!fullName || !email || !password) {
+            return res.status(400).json({ message: "Name, email, and password are required" });
+        }
 
         // Check if the email or username already exists in the database
         const existingUser = await prisma.patient.findFirst({
             where: {
                 OR: [
                     { email },
-                    { name },
+                    { name: fullName },
                 ],
             },
         });
@@ -91,9 +114,10 @@ const signup = async (req, res) => {
         // Create the user in the database
         const newUser = await prisma.patient.create({
             data: {
-                name,
+                name: fullName,
                 email,
                 password: hashedPassword, // Store the hashed password
+                age: age, // Add age if calculated from dateOfBirth
             },
         });
 
@@ -103,6 +127,7 @@ const signup = async (req, res) => {
             patientId: newUser.id,
             name: newUser.name,
             email: newUser.email,
+            age: newUser.age,
         });
     } catch (error) {
         console.error("Signup Error", error);  // Log the error to help debugging

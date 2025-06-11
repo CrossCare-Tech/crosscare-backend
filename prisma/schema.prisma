@@ -8,25 +8,27 @@ datasource db {
 }
 
 model Patient {
-  id         String            @id @default(uuid())
-  email      String            @unique
-  password   String
-  createdAt  DateTime          @default(now()) @map("created_at")
-  updatedAt  DateTime          @default(now()) @map("updated_at")
-  name       String
-  age        Int?
-  profileImage     String?       @map("profile_image")
-  avatarUrl    String?           @map("avatar_url")
-  week       Int?
-  day        Int?
-  doctorId   String?
-  activities PatientActivity[]
-  questionResponses  QuestionResponse[]
-  questionnaires     Questionnaire[]
-  patientBadges PatientBadge[] @relation("PatientToBadge")
-  habitBadges   HabitBadge[]
-  savedMealTemplates SavedMealTemplate[]
-  appointments Appointment[]
+  id                      String            @id @default(uuid())
+  email                   String            @unique
+  password                String
+  createdAt               DateTime          @default(now()) @map("created_at")
+  updatedAt               DateTime          @default(now()) @map("updated_at")
+  name                    String
+  age                     Int?
+  profileImage            String?       @map("profile_image")
+  avatarUrl               String?           @map("avatar_url")
+  week                    Int?
+  day                     Int?
+  doctorId                String?
+  activities              PatientActivity[]
+  questionResponses       QuestionResponse[]
+  questionnaires          Questionnaire[]
+  patientBadges           PatientBadge[] @relation("PatientToBadge")
+  habitBadges             HabitBadge[]
+  savedMealTemplates      SavedMealTemplate[]
+  appointments            Appointment[]
+  resetToken              String?
+  resetTokenExpires       DateTime?
 }
 
 model Doctor {
