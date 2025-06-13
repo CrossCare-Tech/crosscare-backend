@@ -124,7 +124,7 @@ const findOrCreateActivity = async (patientId) => {
               stepsGoal: patient.stepsGoal || 5000, // Default to 5000 steps if not set
               heart_rate: 0,
               weight: null,
-              calorieGoal: patient.calorieGoal || 0,
+              calorieGoal: patient.calorieGoal || 2000,
               caloriesConsumed: 0,
               goodFoodCount: 0,
               badFoodCount: 0,
