@@ -119,9 +119,9 @@ const findOrCreateActivity = async (patientId) => {
               patientId: String(patientId),
               date: today,
               water: 0,
-              waterGoal: patient.waterGoal || 0, // Default to 2500 ml if not set
+              waterGoal: patient.waterGoal || 2500, // Default to 2500 ml if not set
               steps: 0,
-              stepsGoal: patient.stepsGoal || 0, // Default to 5000 steps if not set
+              stepsGoal: patient.stepsGoal || 5000, // Default to 5000 steps if not set
               heart_rate: 0,
               weight: null,
               calorieGoal: patient.calorieGoal || 0,
