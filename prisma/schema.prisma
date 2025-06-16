@@ -20,6 +20,12 @@ model Patient {
   week                    Int?
   day                     Int?
   doctorId                String?
+  
+  // Add default goal fields
+  waterGoal               Int?              @default(2500)  // Default 2500ml (10 glasses)
+  calorieGoal             Int?              @default(2000)  // Default 2000 calories
+  stepsGoal               Int?              @default(5000)  // Default 5000 steps
+  
   activities              PatientActivity[]
   questionResponses       QuestionResponse[]
   questionnaires          Questionnaire[]
@@ -225,7 +231,8 @@ model FoodItem {
   dailyMealId     String
   name            String              // e.g., "Coffee", "Tea", "Apple"
   portion         String              // e.g., "1 Tea cup", "1 Small (2-3/4" dia)"
-  calories        Int                  // e.g., 133
+  quantity        Int                 @default(1) // Number of portions
+  calories        Int                  // e.g., 133 (calories per single portion)
   classification  FoodClassification  // GOOD or BAD only
   
   // Additional nutrition info (optional)

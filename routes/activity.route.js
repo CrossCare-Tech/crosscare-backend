@@ -67,5 +67,10 @@ router.post('/user/activity/:id/appointment', activityController.createAppointme
 router.get('/user/activity/:id/appointments', activityController.getPatientAppointments);
 router.put('/user/activity/:id/appointments/:appointmentId', activityController.updateAppointment);
 router.delete('/user/activity/:id/appointments/:appointmentId', activityController.deleteAppointment);
+router.get('/user/activity/:id/goals', activityController.getUserGoals);
+
+// Food item management routes
+router.delete('/user/:userId/meals/:mealId/fooditems/:foodItemId', activityController.deleteFoodItem);
+router.put('/user/:userId/meals/:mealId/fooditems/:foodItemId/quantity', activityController.updateFoodItemQuantity);
 
 export default router;
