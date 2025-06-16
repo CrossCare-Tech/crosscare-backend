@@ -171,7 +171,7 @@ const getUserGoals = async (req, res) => {
           patientId: id,
           date: today,
           calorieGoal: patient.calorieGoal || 2000,
-          waterGoal: patient.waterGoal || 2500,
+          waterGoal: patient.waterGoal || 10,
           stepsGoal: patient.stepsGoal || 5000,
           caloriesConsumed: 0,
           goodFoodCount: 0,
@@ -3163,7 +3163,7 @@ const caloriesGoal = async (req, res) => {
 const getCalorieHistory = async (req, res) => {
   try {
     const { id } = req.params;
-    const { timeRange = 'week' } = req.query; // week, month, lastMonth, today
+    const { timeRange = 'week' } = req.query;
     
     // Calculate date range based on timeRange
     let startDate, endDate;
@@ -3208,24 +3208,7 @@ const getCalorieHistory = async (req, res) => {
       },
     });
 
-    // Fetch all meals for these activities
-    const activityIds = activities.map(a => a.id);
-    const meals = await prisma.meals.findMany({
-      where: { 
-        patientActivityId: { in: activityIds },
-        createdAt: {
-          gte: startDate,
-          lte: endDate
-        }
-      },
-      select: {
-        totalCalories: true,
-        createdAt: true,
-        patientActivityId: true
-      }
-    });
-
-    // Group calories by date
+    // Group calories by date using activity date instead of meal createdAt
     const dailyCalories = {};
     
     // Initialize all dates in range with 0 calories
@@ -3234,11 +3217,11 @@ const getCalorieHistory = async (req, res) => {
       dailyCalories[dateKey] = 0;
     }
     
-    // Add actual calorie data
-    meals.forEach(meal => {
-      const dateKey = meal.createdAt.toISOString().split('T')[0];
+    // Use activity data directly instead of fetching meals separately
+    activities.forEach(activity => {
+      const dateKey = activity.date.toISOString().split('T')[0];
       if (dailyCalories[dateKey] !== undefined) {
-        dailyCalories[dateKey] += meal.totalCalories;
+        dailyCalories[dateKey] = activity.caloriesConsumed || 0;
       }
     });
 
@@ -3266,17 +3249,23 @@ const addMeals = async (req, res) => {
   console.log("🔵 Received request to add food item");
   
   const { id: patientId } = req.params;
-  console.log(patientId);
+  console.log("🟡 Patient ID:", patientId);
   
   try {
     const { mealType, name, portion, calories, classification, date, quantity = 1 } = req.body;
 
-    console.log("🟡 Patient ID:", patientId);
-    console.log("🟡 Adding food:", { name, portion, calories, classification, quantity });
+    console.log("🟡 Request body:", { mealType, name, portion, calories, classification, date, quantity });
+    console.log("🟡 Raw date received:", date);
+    console.log("🟡 Date type:", typeof date);
 
-    // Get or create activity for today (or you could accept a date parameter)
+    // Get or create activity for the specified date
     const targetDate = date ? new Date(date) : new Date();
+    console.log("🟡 Target date created:", targetDate);
+    console.log("🟡 Target date ISO:", targetDate.toISOString());
+    console.log("🟡 Target date local:", targetDate.toLocaleDateString());
+    
     const activity = await findOrCreateActivityForDate(patientId, targetDate);
+    console.log("🟡 Activity found/created for date:", activity.date.toISOString());
 
     // Check if this exact food item already exists in this meal
     const result = await prisma.$transaction(async (tx) => {
