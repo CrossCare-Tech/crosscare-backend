@@ -119,7 +119,7 @@ const findOrCreateActivity = async (patientId) => {
               patientId: String(patientId),
               date: today,
               water: 0,
-              waterGoal: patient.waterGoal || 2500, // Default to 2500 ml if not set
+              waterGoal: patient.waterGoal || 10, // Default to 2500 ml if not set
               steps: 0,
               stepsGoal: patient.stepsGoal || 5000, // Default to 5000 steps if not set
               heart_rate: 0,
@@ -176,7 +176,7 @@ const getUserGoals = async (req, res) => {
           caloriesConsumed: 0,
           goodFoodCount: 0,
           badFoodCount: 0,
-          water: 0,
+          water: 0, 
           steps: 0
         }
       });
@@ -187,7 +187,7 @@ const getUserGoals = async (req, res) => {
     // Return the goals (either from existing activity or newly created one)
     res.status(200).json({
       calorieGoal: activity.calorieGoal || 2000,
-      waterGoal: activity.waterGoal || 2500,
+      waterGoal: activity.waterGoal || 10,
       stepsGoal: activity.stepsGoal || 5000
     });
   } catch (error) {
