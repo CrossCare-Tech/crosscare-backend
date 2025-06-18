@@ -2225,88 +2225,88 @@ const getUserNotes = async (req, res) => {
   }
 };
 
-  const addMedication = async (req, res) => {
-    try {
-      const { id: patientId } = req.params; 
-      const { medicationName, startDate, endDate, days, times } = req.body;
-  
-      if (!medicationName || !startDate || !days || !times || days.length === 0 || times.length === 0) {
-        return res.status(400).json({ 
-          success: false,
-          error: "Missing required medication information" 
-        });
-      }
-      
-      const patient = await prisma.patient.findUnique({
-        where: { id: patientId }
+const addMedication = async (req, res) => {
+  try {
+    const { id: patientId } = req.params; 
+    const { medicationName, startDate, endDate, days, times } = req.body;
+
+    if (!medicationName || !startDate || !days || !times || days.length === 0 || times.length === 0) {
+      return res.status(400).json({ 
+        success: false,
+        error: "Missing required medication information" 
       });
-      
-      if (!patient) {
-        return res.status(404).json({
-          success: false,
-          message: "Patient not found"
-        });
+    }
+    
+    const patient = await prisma.patient.findUnique({
+      where: { id: patientId }
+    });
+    
+    if (!patient) {
+      return res.status(404).json({
+        success: false,
+        message: "Patient not found"
+      });
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let patientActivity = await prisma.patientActivity.findFirst({
+      where: {
+        patientId: patientId,
+        date: today
       }
-  
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-  
-      let patientActivity = await prisma.patientActivity.findFirst({
-        where: {
+    });
+
+    if (!patientActivity) {
+      patientActivity = await prisma.patientActivity.create({
+        data: {
           patientId: patientId,
           date: today
         }
       });
-  
-      if (!patientActivity) {
-        patientActivity = await prisma.patientActivity.create({
-          data: {
-            patientId: patientId,
-            date: today
-          }
-        });
-      }
-  
-      const formattedStartDate = new Date(startDate);
-      const formattedEndDate = endDate ? new Date(endDate) : null;
-      
-      const formattedTimes = times.map(time => {
-        const [hours, minutes] = time.split(':');
-        const timeDate = new Date();
-        timeDate.setHours(parseInt(hours, 10));
-        timeDate.setMinutes(parseInt(minutes, 10));
-        timeDate.setSeconds(0);
-        return timeDate;
-      });
-  
-      // Create medication in the database using Prisma
-      const newMedication = await prisma.medication.create({
-        data: {
-          medicationName,
-          startDate: formattedStartDate,
-          endDate: formattedEndDate,
-          days,
-          times: formattedTimes,
-          patientActivityId: patientActivity.id // Use the ID of the found or created activity
-        }
-      });
-  
-      return res.status(201).json({
-        success: true,
-        message: "Medication added successfully",
-        data: newMedication
-      });
-    } catch (error) {
-      console.error("Error adding medication:", error);
-      return res.status(500).json({ 
-        success: false,
-        message: "Failed to add medication", 
-        error: error.message 
-      });
     }
-  };
 
-  const getMedications = async (req, res) => {
+    const formattedStartDate = new Date(startDate);
+    const formattedEndDate = endDate ? new Date(endDate) : null;
+    
+    const formattedTimes = times.map(time => {
+      const [hours, minutes] = time.split(':');
+      const timeDate = new Date();
+      timeDate.setHours(parseInt(hours, 10));
+      timeDate.setMinutes(parseInt(minutes, 10));
+      timeDate.setSeconds(0);
+      return timeDate;
+    });
+
+    // Create medication in the database using Prisma
+    const newMedication = await prisma.medication.create({
+      data: {
+        medicationName,
+        startDate: formattedStartDate,
+        endDate: formattedEndDate,
+        days,
+        times: formattedTimes,
+        patientActivityId: patientActivity.id // Use the ID of the found or created activity
+      }
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Medication added successfully",
+      data: newMedication
+    });
+  } catch (error) {
+    console.error("Error adding medication:", error);
+    return res.status(500).json({ 
+      success: false,
+      message: "Failed to add medication", 
+      error: error.message 
+    });
+  }
+};
+
+const getMedications = async (req, res) => {
     try {
         const { id } = req.params;
         const { startDate, endDate } = req.query;

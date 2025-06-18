@@ -77,7 +77,7 @@ const login = async (req, res) => {
 // Signup function - now sends OTP for email verification
 const signup = async (req, res) => {
     try {
-        const { firstName, lastName, dateOfBirth, email, password, name } = req.body;
+        const { firstName, lastName, dateOfBirth, email, password, name, phoneNumber } = req.body;
 
         // Support both new format (firstName, lastName, dateOfBirth) and old format (name)
         let fullName = name;
@@ -127,6 +127,7 @@ const signup = async (req, res) => {
                 data: {
                     name: fullName,
                     password: hashedPassword,
+                    phoneNumber: phoneNumber || null,
                     age: age,
                     emailVerificationToken: otp,
                     emailTokenExpires: expiryTime
@@ -139,6 +140,7 @@ const signup = async (req, res) => {
                     name: fullName,
                     email,
                     password: hashedPassword,
+                    phoneNumber: phoneNumber || null,
                     age: age,
                     isEmailVerified: false,
                     emailVerificationToken: otp,

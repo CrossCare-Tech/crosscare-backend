@@ -29,10 +29,21 @@ const getProfileDetails = async (req, res) => {
             where: {
                 id: userId,  // Use the userId from the decoded token
             },
-            include:{
-                activities: true,  // Include activities related to the user
-                questionnaires: true,  // Include questionnaires related to the user
-                questionResponses: true,  // Include question responses related to the user
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                phoneNumber: true,
+                age: true,
+                week: true,
+                day: true,
+                profileImage: true,
+                avatarUrl: true,
+                createdAt: true,
+                updatedAt: true,
+                activities: true,
+                questionnaires: true,
+                questionResponses: true,
             }
         });
 
@@ -288,13 +299,14 @@ const updateProfile = async (req, res) => {
     const { id } = req.params;
     
     // Extract profile data from the request body
-    const { name, email, age, week } = req.body;
+    const { name, email, phoneNumber, age, week } = req.body;
     
     // Create an update object with only the fields that were provided
     const updateData = {};
     
     if (name !== undefined) updateData.name = name;
     if (email !== undefined) updateData.email = email;
+    if (phoneNumber !== undefined) updateData.phoneNumber = phoneNumber;
     if (age !== undefined) updateData.age = parseInt(age);
     if (week !== undefined) {
       const weekNumber = parseInt(week);
@@ -350,6 +362,7 @@ const updateProfile = async (req, res) => {
         id: true,
         name: true,
         email: true,
+        phoneNumber: true,
         age: true,
         week: true,
         profileImage: true,
