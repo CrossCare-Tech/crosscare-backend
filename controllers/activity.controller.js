@@ -136,12 +136,12 @@ const findOrCreateActivity = async (patientId) => {
         patientId: String(patientId),
         date: today,
         water: 0,
-        waterGoal: patient.waterGoal || 10, // Default to 10 glasses if not set
+        waterGoal: patient.waterGoal , // Default to 10 glasses if not set
         steps: 0,
-        stepsGoal: patient.stepsGoal || null, // No default for steps
+        stepsGoal: patient.stepsGoal , // No default for steps
         heart_rate: 0,
         weight: null,
-        calorieGoal: patient.calorieGoal || 2000, // Default to 2000 calories
+        calorieGoal: patient.calorieGoal, // Default to 2000 calories
         caloriesConsumed: 0,
         goodFoodCount: 0,
         badFoodCount: 0,
@@ -188,9 +188,9 @@ const getUserGoals = async (req, res) => {
         data: {
           patientId: id,
           date: today,
-          calorieGoal: patient.calorieGoal || 2000,
-          waterGoal: patient.waterGoal || 10,
-          stepsGoal: patient.stepsGoal || null, // No default for steps
+          calorieGoal: patient.calorieGoal,
+          waterGoal: patient.waterGoal,
+          stepsGoal: patient.stepsGoal, // No default for steps
           caloriesConsumed: 0,
           goodFoodCount: 0,
           badFoodCount: 0,
@@ -207,9 +207,9 @@ const getUserGoals = async (req, res) => {
 
     // Return the goals (either from existing activity or newly created one)
     res.status(200).json({
-      calorieGoal: activity.calorieGoal || 2000,
-      waterGoal: activity.waterGoal || 10,
-      stepsGoal: activity.stepsGoal || null, // Return null if no steps goal
+      calorieGoal: activity.calorieGoal,
+      waterGoal: activity.waterGoal,
+      stepsGoal: activity.stepsGoal, // Return null if no steps goal
     });
   } catch (error) {
     console.error("Error in getUserGoals:", error);
@@ -252,9 +252,9 @@ const findOrCreateActivityForDate = async (patientId, targetDate) => {
       data: {
         patientId: patientId,
         date: startOfDay, // Use start of day as the date
-        calorieGoal: patient.calorieGoal || 2000, // Default calorie goal
-        waterGoal: patient.waterGoal || 10, // Default water goal
-        stepsGoal: patient.stepsGoal || null, // No default for steps
+        calorieGoal: patient.calorieGoal, // Default calorie goal
+        waterGoal: patient.waterGoal, // Default water goal
+        stepsGoal: patient.stepsGoal, // No default for steps
         caloriesConsumed: 0,
         goodFoodCount: 0,
         badFoodCount: 0,
@@ -875,8 +875,8 @@ const checkWaterStreakBadge = async (patientId) => {
         }
 
         // Check if water goal was met for this day
-        const waterGoal = activity.waterGoal || 0;
-        const waterIntake = activity.water || 0;
+        const waterGoal = activity.waterGoal;
+        const waterIntake = activity.water;
 
         if (waterGoal > 0 && waterIntake >= waterGoal) {
           weekGroups[weekKey].completeDays++;
@@ -1054,8 +1054,8 @@ const getWaterStatus = async (req, res) => {
     });
 
     const waterData = activities.map((activity) => {
-      const goalMl = activity.waterGoal || 0;
-      const waterMl = activity.water || 0;
+      const goalMl = activity.waterGoal;
+      const waterMl = activity.water;
       const goalMet = goalMl > 0 && waterMl >= goalMl;
 
       return {
@@ -1879,7 +1879,7 @@ const StepsGoal = async (req, res) => {
         weekday: "short",
       }), // Short weekday name
       steps: updatedActivity.steps,
-      stepGoal: updatedActivity.stepsGoal || 0, // Default to 5000 if undefined
+      stepGoal: updatedActivity.stepsGoal, // Default to 5000 if undefined
     });
   } catch (error) {
     console.error("Error logging steps:", error);
@@ -2952,9 +2952,8 @@ const markMedicationCompleted = async (req, res) => {
   }
 };
 
-const supabaseUrl = "https://sfpyewutvgmsmlywgcor.supabase.co";
-const supabaseKey =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNmcHlld3V0dmdtc21seXdnY29yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAwNjA4MzksImV4cCI6MjA2NTYzNjgzOX0.Zi_hX4b1imMCc6B9ErW9HjmGztJ1XCDga_NY_BskO6U";
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Configure multer for memory storage
