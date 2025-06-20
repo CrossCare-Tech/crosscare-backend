@@ -3842,25 +3842,26 @@ const getMeals = async (req, res) => {
     console.log("🟡 I'm being called", id);
     console.log("🟡 Date filter:", date);
 
-    let whereClause = { patientId: id };
+    // **FIX: Default to today's date if no date is provided**
+    const targetDate = date || new Date().toISOString().split('T')[0];
+    
+    const startOfDay = new Date(targetDate);
+    startOfDay.setHours(0, 0, 0, 0);
 
-    // If date is provided, filter by that specific date
-    if (date) {
-      const startOfDay = new Date(date);
-      startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999);
 
-      const endOfDay = new Date(date);
-      endOfDay.setHours(23, 59, 59, 999);
-
-      whereClause.date = {
+    const whereClause = {
+      patientId: id,
+      date: {
         gte: startOfDay,
         lte: endOfDay,
-      };
+      },
+    };
 
-      console.log("🟡 Filtering by date range:", startOfDay, "to", endOfDay);
-    }
+    console.log("🟡 Filtering by date range:", startOfDay, "to", endOfDay);
 
-    // Fetch activities for this patient (filtered by date if provided)
+    // Fetch activities for this patient for the specific date
     const activities = await prisma.patientActivity.findMany({
       where: whereClause,
       select: {
@@ -3874,10 +3875,12 @@ const getMeals = async (req, res) => {
     });
 
     if (activities.length === 0) {
-      // If no activities found for the specific date, return empty structure
+      // **FIX: Create activity for the target date if it doesn't exist**
+      const activity = await findOrCreateActivityForDate(id, new Date(targetDate));
+      
       return res.status(200).json({
         success: true,
-        calorieGoal: 0,
+        calorieGoal: activity.calorieGoal || 0,
         caloriesConsumed: 0,
         goodFoodCount: 0,
         badFoodCount: 0,
@@ -3890,19 +3893,19 @@ const getMeals = async (req, res) => {
       });
     }
 
-    // Collect all activity IDs
-    const activityIds = activities.map((a) => a.id);
+    // **FIX: Since we're filtering by single date, we should only have one activity**
+    const activity = activities[0];
 
-    // Fetch all meals for the filtered activities
+    // Fetch all meals for this specific activity
     const meals = await prisma.meals.findMany({
-      where: { patientActivityId: { in: activityIds } },
+      where: { patientActivityId: activity.id },
       include: {
         foodItems: {
           select: {
             id: true,
             name: true,
             portion: true,
-            quantity: true, // Add quantity field
+            quantity: true,
             calories: true,
             classification: true,
           },
@@ -3925,39 +3928,15 @@ const getMeals = async (req, res) => {
       groupedMeals[key].push(meal);
     }
 
-    // Aggregate data across filtered activities
-    const calorieGoal = activities.reduce(
-      (sum, a) => sum + (a.calorieGoal || 0),
-      0
-    );
-    const caloriesConsumed = activities.reduce(
-      (sum, a) => sum + (a.caloriesConsumed || 0),
-      0
-    );
-    const goodFoodCount = activities.reduce(
-      (sum, a) => sum + (a.goodFoodCount || 0),
-      0
-    );
-    const badFoodCount = activities.reduce(
-      (sum, a) => sum + (a.badFoodCount || 0),
-      0
-    );
-
-    console.log("✅ Meals fetched successfully for date:", date || "all dates");
-    console.log(
-      "🎯 Found",
-      activities.length,
-      "activities with",
-      meals.length,
-      "meals"
-    );
+    console.log("✅ Meals fetched successfully for date:", targetDate);
+    console.log("🎯 Found 1 activity with", meals.length, "meals");
 
     res.status(200).json({
       success: true,
-      calorieGoal,
-      caloriesConsumed,
-      goodFoodCount,
-      badFoodCount,
+      calorieGoal: activity.calorieGoal,
+      caloriesConsumed: activity.caloriesConsumed,
+      goodFoodCount: activity.goodFoodCount,
+      badFoodCount: activity.badFoodCount,
       meals: groupedMeals,
     });
   } catch (error) {
