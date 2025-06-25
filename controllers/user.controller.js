@@ -60,8 +60,9 @@ const getProfileDetails = async (req, res) => {
 };
 
 // TODO: Replace with your actual Supabase credentials
-const supabaseUrl = 'https://sfpyewutvgmsmlywgcor.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNmcHlld3V0dmdtc21seXdnY29yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAwNjA4MzksImV4cCI6MjA2NTYzNjgzOX0.Zi_hX4b1imMCc6B9ErW9HjmGztJ1XCDga_NY_BskO6U';
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Storage bucket name
