@@ -10,6 +10,7 @@ router.put('/user/:id/pregnancy-week', authenticateMiddleware, userController.up
 router.get('/user/:id/pregnancy-week', authenticateMiddleware, userController.getPregnancyWeek);
 router.put('/user/:id/profile', authenticateMiddleware, userController.updateProfile);
 router.post('/user/:id/avatar', authenticateMiddleware, upload1, userController.uploadAvatar);
+router.delete('/user/:userId/delete-account', authenticateMiddleware, userController.deleteAccount);
 
 export default router;
 

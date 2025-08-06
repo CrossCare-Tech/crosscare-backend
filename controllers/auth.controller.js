@@ -173,7 +173,7 @@ const signup = async (req, res) => {
             email
         });
     } catch (error) {
-        console.error("Signup Error", error);
+        console.error("Signup Error", error.response.body.errors);
         res.status(500).json({ message: "Internal Server Error", details: error.message });
     }
 };

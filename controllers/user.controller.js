@@ -498,4 +498,153 @@ const uploadAvatar = async (req, res) => {
   }
 };
 
-export default {getProfileDetails, uploadProfileImage, upload, updatePregnancyWeek, getPregnancyWeek, updateProfile, uploadAvatar, upload1};
+const deleteAccount = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    console.log('Attempting to delete account for user:', userId);
+
+    // Verify user exists
+    const patient = await prisma.patient.findUnique({
+      where: { id: userId }
+    });
+
+    if (!patient) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Start a transaction to delete all related data with increased timeout
+    await prisma.$transaction(async (tx) => {
+      console.log('Starting transaction for user deletion:', userId);
+      
+      // Delete all related data in the correct order (respecting foreign key constraints)
+      
+      // First, get all PatientActivity IDs for this patient
+      const patientActivities = await tx.patientActivity.findMany({
+        where: { patientId: userId },
+        select: { id: true }
+      });
+
+      const activityIds = patientActivities.map(activity => activity.id);
+      console.log(`Found ${activityIds.length} patient activities to process`);
+
+      // Delete records that are connected through PatientActivity
+      if (activityIds.length > 0) {
+        // Delete NoteTaking records (connected through patientActivityId)
+        const deletedNotes = await tx.noteTaking.deleteMany({
+          where: { patientActivityId: { in: activityIds } }
+        });
+        console.log(`Deleted ${deletedNotes.count} note taking records`);
+
+        // Delete Medication records (connected through patientActivityId)
+        const deletedMeds = await tx.medication.deleteMany({
+          where: { patientActivityId: { in: activityIds } }
+        });
+        console.log(`Deleted ${deletedMeds.count} medication records`);
+
+        // Delete WombPicture records (connected through patientActivityId)
+        const deletedWombPics = await tx.wombPicture.deleteMany({
+          where: { patientActivityId: { in: activityIds } }
+        });
+        console.log(`Deleted ${deletedWombPics.count} womb picture records`);
+
+        // Delete FoodItems first, then Meals (more efficient than individual meal processing)
+        const deletedFoodItems = await tx.foodItem.deleteMany({
+          where: { 
+            Meals: { 
+              patientActivityId: { in: activityIds } 
+            } 
+          }
+        });
+        console.log(`Deleted ${deletedFoodItems.count} food item records`);
+
+        const deletedMeals = await tx.meals.deleteMany({
+          where: { patientActivityId: { in: activityIds } }
+        });
+        console.log(`Deleted ${deletedMeals.count} meal records`);
+      }
+
+      // Delete records directly connected to patientId
+      
+      // Delete PatientBadge records
+      const deletedPatientBadges = await tx.patientBadge.deleteMany({
+        where: { patientId: userId }
+      });
+      console.log(`Deleted ${deletedPatientBadges.count} patient badge records`);
+
+      // Delete HabitBadge records
+      const deletedHabitBadges = await tx.habitBadge.deleteMany({
+        where: { patientId: userId }
+      });
+      console.log(`Deleted ${deletedHabitBadges.count} habit badge records`);
+
+      // Delete SavedMealItem records first, then SavedMealTemplate (more efficient)
+      const deletedSavedMealItems = await tx.savedMealItem.deleteMany({
+        where: { 
+          savedMeal: { 
+            patientId: userId 
+          } 
+        }
+      });
+      console.log(`Deleted ${deletedSavedMealItems.count} saved meal item records`);
+
+      const deletedSavedMealTemplates = await tx.savedMealTemplate.deleteMany({
+        where: { patientId: userId }
+      });
+      console.log(`Deleted ${deletedSavedMealTemplates.count} saved meal template records`);
+
+      // Delete QuestionResponse records
+      const deletedQuestionResponses = await tx.questionResponse.deleteMany({
+        where: { patientId: userId }
+      });
+      console.log(`Deleted ${deletedQuestionResponses.count} question response records`);
+
+      // Delete Questionnaire records
+      const deletedQuestionnaires = await tx.questionnaire.deleteMany({
+        where: { patientId: userId }
+      });
+      console.log(`Deleted ${deletedQuestionnaires.count} questionnaire records`);
+
+      // Delete Appointment records
+      const deletedAppointments = await tx.appointment.deleteMany({
+        where: { patientId: userId }
+      });
+      console.log(`Deleted ${deletedAppointments.count} appointment records`);
+
+      // Delete PatientActivity records (this will cascade delete remaining related records)
+      const deletedActivities = await tx.patientActivity.deleteMany({
+        where: { patientId: userId }
+      });
+      console.log(`Deleted ${deletedActivities.count} patient activity records`);
+
+      // Finally, delete the patient record
+      await tx.patient.delete({
+        where: { id: userId }
+      });
+      console.log('Deleted patient record');
+      
+    }, {
+      timeout: 30000, // 30 second timeout instead of default 5 seconds
+    });
+
+    console.log('Successfully deleted account for user:', userId);
+
+    res.status(200).json({
+      success: true,
+      message: "Account deleted successfully"
+    });
+
+  } catch (error) {
+    console.error('Error deleting account:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete account',
+      error: error.message
+    });
+  }
+};
+
+export default {getProfileDetails, uploadProfileImage, upload, updatePregnancyWeek, getPregnancyWeek, updateProfile, uploadAvatar, upload1, deleteAccount};

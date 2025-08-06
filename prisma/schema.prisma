@@ -8,39 +8,34 @@ datasource db {
 }
 
 model Patient {
-  id                      String            @id @default(uuid())
-  email                   String            @unique
-  password                String
-  createdAt               DateTime          @default(now()) @map("created_at")
-  updatedAt               DateTime          @default(now()) @map("updated_at")
-  name                    String
-  phoneNumber             String?           @map("phone_number")
-  age                     Int?
-  profileImage            String?       @map("profile_image")
-  avatarUrl               String?           @map("avatar_url")
-  week                    Int?
-  day                     Int?
-  doctorId                String?
-  
-  // Updated default goal fields - remove stepsGoal default
-  waterGoal               Int?              @default(10)    // 10 glasses of water
-  calorieGoal             Int?              @default(2000)  // 2000 calories
-  stepsGoal               Int?              // Remove default value
-  
-  // Email verification fields
-  isEmailVerified         Boolean           @default(false)
-  emailVerificationToken  String?
-  emailTokenExpires       DateTime?
-  
-  activities              PatientActivity[]
-  questionResponses       QuestionResponse[]
-  questionnaires          Questionnaire[]
-  patientBadges           PatientBadge[] @relation("PatientToBadge")
-  habitBadges             HabitBadge[]
-  savedMealTemplates      SavedMealTemplate[]
-  appointments            Appointment[]
-  resetToken              String?
-  resetTokenExpires       DateTime?
+  id                     String              @id @default(uuid())
+  email                  String              @unique
+  password               String
+  createdAt              DateTime            @default(now()) @map("created_at")
+  updatedAt              DateTime            @default(now()) @map("updated_at")
+  name                   String
+  phoneNumber            String?             @map("phone_number")
+  age                    Int?
+  profileImage           String?             @map("profile_image")
+  avatarUrl              String?             @map("avatar_url")
+  week                   Int?
+  day                    Int?
+  doctorId               String?
+  waterGoal              Int?                @default(10)
+  calorieGoal            Int?                @default(2000)
+  stepsGoal              Int?
+  isEmailVerified        Boolean             @default(false)
+  emailVerificationToken String?
+  emailTokenExpires      DateTime?
+  resetToken             String?
+  resetTokenExpires      DateTime?
+  appointments           Appointment[]
+  habitBadges            HabitBadge[]
+  activities             PatientActivity[]
+  patientBadges          PatientBadge[]      @relation("PatientToBadge")
+  questionResponses      QuestionResponse[]
+  questionnaires         Questionnaire[]
+  savedMealTemplates     SavedMealTemplate[]
 }
 
 model Doctor {
@@ -52,13 +47,301 @@ model Doctor {
   updatedAt DateTime @default(now()) @map("updated_at")
 }
 
+model Badge {
+  id          String         @id @default(uuid())
+  type        BadgeType      @unique
+  title       String
+  description String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  awarded     PatientBadge[]
+}
+
+model PatientBadge {
+  id        String   @id @default(uuid())
+  patientId String
+  badgeId   String
+  awardedAt DateTime @default(now())
+  badge     Badge    @relation(fields: [badgeId], references: [id])
+  patient   Patient  @relation("PatientToBadge", fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, badgeId])
+}
+
+model HabitBadge {
+  id        String    @id @default(uuid())
+  patientId String
+  habit     HabitType
+  badgeType BadgeType
+  awardedAt DateTime  @default(now())
+  patient   Patient   @relation(fields: [patientId], references: [id])
+
+  @@unique([patientId, badgeType])
+}
+
+model PatientActivity {
+  id               String        @id @default(uuid())
+  patientId        String        @map("user_id")
+  date             DateTime
+  weight           Float?
+  weight_unit      String?
+  water            Int?
+  steps            Int?
+  sleepStart       DateTime?
+  sleepEnd         DateTime?
+  heart_rate       Float?
+  notetaking       String?
+  wombPicture      String?
+  calorieGoal      Int?
+  caloriesConsumed Int?
+  goodFoodCount    Int?
+  badFoodCount     Int?
+  waterGoal        Int?
+  stepsGoal        Int?
+  medications      Medication[]
+  noteTaking       NoteTaking[]
+  patient          Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  wombPictures     WombPicture[]
+  meal             Meals[]
+}
+
+model WombPicture {
+  id                String          @id @default(uuid())
+  patientActivityId String
+  title             String
+  imageUrl          String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  patientActivity   PatientActivity @relation(fields: [patientActivityId], references: [id])
+}
+
+model NoteTaking {
+  id                String          @id @default(uuid())
+  patientActivityId String
+  title             String
+  description       String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  patientActivity   PatientActivity @relation(fields: [patientActivityId], references: [id])
+}
+
+model Meals {
+  id                String          @id @default(uuid())
+  patientActivityId String
+  mealType          MealType
+  totalCalories     Int
+  foodItemsCount    Int
+  isSavedAsMeal     Boolean
+  savedMealName     String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  foodItems         FoodItem[]
+  patientActivity   PatientActivity @relation(fields: [patientActivityId], references: [id], onDelete: Cascade)
+
+  @@unique([patientActivityId, mealType])
+  @@map("meal")
+}
+
+model FoodItem {
+  id             String             @id @default(uuid())
+  dailyMealId    String
+  name           String
+  portion        String
+  quantity       Int                @default(1)
+  calories       Int
+  classification FoodClassification
+  protein        Float?
+  carbohydrates  Float?
+  fat            Float?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  Meals          Meals              @relation(fields: [dailyMealId], references: [id], onDelete: Cascade)
+
+  @@map("food_items")
+}
+
+model SavedMealTemplate {
+  id            String          @id @default(uuid())
+  patientId     String
+  name          String
+  mealType      MealType
+  description   String?
+  totalCalories Int
+  isPublic      Boolean
+  usageCount    Int
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  templateItems SavedMealItem[]
+  patient       Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("saved_meal_templates")
+}
+
+model SavedMealItem {
+  id             String             @id @default(uuid())
+  savedMealId    String
+  name           String
+  portion        String
+  calories       Int
+  classification FoodClassification
+  savedMeal      SavedMealTemplate  @relation(fields: [savedMealId], references: [id], onDelete: Cascade)
+
+  @@map("saved_meal_items")
+}
+
+model FoodDatabase {
+  id              String             @id @default(uuid())
+  name            String             @unique
+  commonPortions  Json
+  classification  FoodClassification
+  caloriesPer100g Int
+  protein         Float?
+  carbohydrates   Float?
+  fat             Float?
+  isVerified      Boolean
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@map("food_database")
+}
+
+model MedicalDocs {
+  id    String @id @default(uuid())
+  files String
+}
+
+model Medication {
+  id                String          @id @default(uuid())
+  patientActivityId String
+  medicationName    String
+  startDate         DateTime
+  endDate           DateTime?
+  days              String[]
+  times             DateTime[]
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  completed         Boolean         @default(false)
+  completedDates    String[]        @default([])
+  patientActivity   PatientActivity @relation(fields: [patientActivityId], references: [id])
+}
+
+model SelfCareCategory {
+  id             String      @id @default(uuid())
+  title          String
+  iconType       IconType
+  count          Int
+  contentType    ContentType
+  gradientStart  String
+  gradientMiddle String?
+  gradientEnd    String
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  audioTracks    Audio[]
+  exercises      Exercise[]
+  stories        Story[]
+}
+
+model Exercise {
+  id         String           @id @default(uuid())
+  type       String
+  title      String
+  duration   String
+  image      String
+  isLocked   Boolean          @default(false)
+  categoryId String
+  isFavorite Boolean          @default(false)
+  content    String?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  category   SelfCareCategory @relation(fields: [categoryId], references: [id])
+}
+
+model Audio {
+  id         String           @id @default(uuid())
+  title      String
+  url        String
+  duration   String?
+  image      String?
+  categoryId String
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  category   SelfCareCategory @relation(fields: [categoryId], references: [id])
+}
+
+model Story {
+  id         String           @id @default(uuid())
+  title      String
+  content    String
+  image      String?
+  duration   String?
+  categoryId String
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  category   SelfCareCategory @relation(fields: [categoryId], references: [id])
+}
+
+model QuestionnaireDomain {
+  id          String     @id @default(uuid())
+  name        String
+  title       String
+  description String
+  order       Int
+  questions   Question[]
+}
+
+model Question {
+  id           String              @id @default(uuid())
+  questionId   String
+  text         String
+  possibleFlag String?
+  domainId     String
+  order        Int
+  domain       QuestionnaireDomain @relation(fields: [domainId], references: [id])
+  responses    QuestionResponse[]
+}
+
+model QuestionResponse {
+  id              String         @id @default(uuid())
+  patientId       String
+  questionId      String
+  domainId        String
+  response        String
+  flag            String?
+  timestamp       DateTime       @default(now())
+  questionnaireId String?
+  patient         Patient        @relation(fields: [patientId], references: [id])
+  question        Question       @relation(fields: [questionId], references: [id])
+  questionnaire   Questionnaire? @relation(fields: [questionnaireId], references: [id])
+}
+
+model Questionnaire {
+  id          String             @id @default(uuid())
+  patientId   String
+  startedAt   DateTime           @default(now())
+  completedAt DateTime?
+  isActive    Boolean            @default(true)
+  isPaused    Boolean            @default(false)
+  isCompleted Boolean            @default(false)
+  responses   QuestionResponse[]
+  patient     Patient            @relation(fields: [patientId], references: [id])
+}
+
+model Appointment {
+  id              String   @id @default(uuid())
+  patientId       String
+  title           String
+  appointmentDate DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  patient         Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
 enum HabitType {
   WATER
   SLEEP
   FOOD
   STEPS
 }
-
 
 enum BadgeType {
   HYDRATED_QUEEN
@@ -129,213 +412,6 @@ enum FoodClassification {
   BAD
 }
 
-model Badge {
-  id          String      @id @default(uuid())
-  type        BadgeType   @unique
-  title       String
-  description String
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  awarded     PatientBadge[]
-}
-
-model PatientBadge {
-  id        String   @id @default(uuid())
-  patientId String
-  badgeId   String
-  awardedAt DateTime @default(now())
-
-  patient   Patient  @relation("PatientToBadge", fields: [patientId], references: [id], onDelete: Cascade)
-  badge     Badge   @relation(fields: [badgeId], references: [id])
-
-  @@unique([patientId, badgeId])
-}
-
-model HabitBadge {
-  id         String     @id @default(uuid())
-  patientId  String
-  habit      HabitType
-  badgeType  BadgeType
-  awardedAt  DateTime   @default(now())
-
-  patient    Patient    @relation(fields: [patientId], references: [id])
-
-  @@unique([patientId, badgeType])
-}
-
-
-
-model PatientActivity {
-  id          String       @id @default(uuid())
-  patientId   String       @map("user_id")
-  date        DateTime
-  weight      Float?
-  weight_unit String?
-  water       Int?
-  steps       Int?
-  sleepStart  DateTime?
-  sleepEnd    DateTime?
-  heart_rate  Float?
-  notetaking  String?
-  wombPicture String?
-
-  calorieGoal     Int?             // Daily calorie goal
-  caloriesConsumed Int?            // Total calories consumed
-  goodFoodCount   Int?             // Count of good foods
-  badFoodCount    Int?         
-
-  waterGoal   Int?
-  stepsGoal   Int?
-  meal        Meals[]
-  medications Medication[]
-  noteTaking  NoteTaking[]
-  wombPictures WombPicture[] // New relation
-  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
-}
-
-model WombPicture {
-  id                String          @id @default(uuid())
-  patientActivityId String
-  title             String
-  imageUrl          String?
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  patientActivity   PatientActivity @relation(fields: [patientActivityId], references: [id])
-}
-
-model NoteTaking{
-  id                String          @id @default(uuid())
-  patientActivityId String
-  title             String
-  description       String?
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  patientActivity   PatientActivity @relation(fields: [patientActivityId], references: [id])
-}
-
-model Meals {
-  id                String          @id @default(uuid())
-  patientActivityId String
-  mealType          MealType
-  totalCalories     Int             
-  foodItemsCount    Int            
-  isSavedAsMeal     Boolean         
-  savedMealName     String?         // Custom name when saved
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  
-  // Relations
-  patientActivity   PatientActivity @relation(fields: [patientActivityId], references: [id], onDelete: Cascade)
-  foodItems         FoodItem[]
-  
-  @@unique([patientActivityId, mealType]) // One meal per type per day
-  @@map("meal")
-}
-
-model FoodItem {
-  id              String              @id @default(uuid())
-  dailyMealId     String
-  name            String              // e.g., "Coffee", "Tea", "Apple"
-  portion         String              // e.g., "1 Tea cup", "1 Small (2-3/4" dia)"
-  quantity        Int                 @default(1) // Number of portions
-  calories        Int                  // e.g., 133 (calories per single portion)
-  classification  FoodClassification  // GOOD or BAD only
-  
-  // Additional nutrition info (optional)
-  protein         Float?              // in grams
-  carbohydrates   Float?              // in grams
-  fat             Float?              // in grams
-  
-  // Metadata
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  
-  // Relations
-  Meals       Meals           @relation(fields: [dailyMealId], references: [id], onDelete: Cascade)
-  
-  @@map("food_items")
-}
-
-model SavedMealTemplate {
-  id          String              @id @default(uuid())
-  patientId   String
-  name        String             
-  mealType    MealType
-  description String?
-  totalCalories Int              
-  isPublic    Boolean            
-  usageCount  Int                     // How many times used
-  
-  // Template food items
-  templateItems SavedMealItem[]
-  
-  // Metadata
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-  
-  // Relations
-  patient     Patient             @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  
-  @@map("saved_meal_templates")
-}
-
-// Food items in saved meal templates
-model SavedMealItem {
-  id              String              @id @default(uuid())
-  savedMealId     String
-  name            String
-  portion         String
-  calories        Int                 
-  classification  FoodClassification 
-  
-  // Relations
-  savedMeal       SavedMealTemplate   @relation(fields: [savedMealId], references: [id], onDelete: Cascade)
-  
-  @@map("saved_meal_items")
-}
-
-// Food database for quick selection and calorie lookup
-model FoodDatabase {
-  id              String              @id @default(uuid())
-  name            String              @unique
-  commonPortions  Json                // Array of common portions: [{"portion": "1 cup", "calories": 133}, {"portion": "1 tea cup", "calories": 100}]
-  classification  FoodClassification  
-  
-  // Base nutrition per 100g for calculations
-  caloriesPer100g Int
-  protein         Float?
-  carbohydrates   Float?
-  fat             Float?
-  
-  // Metadata
-  isVerified      Boolean             
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  
-  @@map("food_database")
-}
-
-model MedicalDocs {
-  id    String @id @default(uuid())
-  files String
-}
-
-model Medication {
-  id                String          @id @default(uuid())
-  patientActivityId String
-  medicationName    String
-  startDate         DateTime
-  endDate           DateTime?
-  days              String[]
-  times             DateTime[]
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  completed         Boolean         @default(false)
-  completedDates    String[]        @default([])
-  patientActivity   PatientActivity @relation(fields: [patientActivityId], references: [id])
-}
-
-
 enum ContentType {
   EXERCISES
   AUDIOS
@@ -350,121 +426,4 @@ enum IconType {
   cloud
   sun
   feather
-}
-
-model SelfCareCategory {
-  id             String      @id @default(uuid())
-  title          String
-  iconType       IconType
-  count          Int
-  contentType    ContentType
-  gradientStart  String
-  gradientMiddle String?
-  gradientEnd    String
-  exercises      Exercise[]
-  audioTracks    Audio[]
-  stories        Story[]
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-}
-
-model Exercise {
-  id                String           @id @default(uuid())
-  type              String
-  title             String
-  duration          String
-  image             String
-  isLocked          Boolean          @default(false)
-  categoryId        String
-  isFavorite        Boolean          @default(false)
-  content           String?          @db.Text
-  category          SelfCareCategory @relation(fields: [categoryId], references: [id])
-  // favoriteOfUsers   Patient[]        @relation("PatientFavorites")
-  // recentlyUsedByUsers Patient[]      @relation("PatientRecentlyUsed")
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-}
-
-model Audio {
-  id         String           @id @default(uuid())
-  title      String
-  url        String
-  duration   String?
-  image      String?
-  categoryId String
-  category   SelfCareCategory @relation(fields: [categoryId], references: [id])
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
-}
-
-model Story {
-  id         String           @id @default(uuid())
-  title      String
-  content    String           @db.Text
-  image      String?
-  duration   String?
-  categoryId String
-  category   SelfCareCategory @relation(fields: [categoryId], references: [id])
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
-}
-
-// Questionnaire Models
-
-model QuestionnaireDomain {
-  id           String      @id @default(uuid())
-  name         String      // e.g., "domain-1", "domain-2" - external identifier
-  title        String      // e.g., "DOMAIN I", "DOMAIN II"
-  description  String      // e.g., "Housing & Environment"
-  order        Int         // To maintain the correct ordering of domains
-  questions    Question[]
-}
-
-model Question {
-  id               String              @id @default(uuid())
-  questionId       String              // e.g., "q1-1", "q2-3" - external identifier
-  text             String              // The actual question text
-  possibleFlag     String?             // e.g., "Housing instability / temporary housing"
-  domainId         String              // Foreign key to domain
-  domain           QuestionnaireDomain @relation(fields: [domainId], references: [id])
-  order            Int                 // To maintain the correct order of questions
-  responses        QuestionResponse[]
-}
-
-model QuestionResponse {
-  id              String         @id @default(uuid())
-  patientId       String
-  patient         Patient        @relation(fields: [patientId], references: [id])
-  questionId      String
-  question        Question       @relation(fields: [questionId], references: [id])
-  domainId        String         // Stored for easier querying
-  response        String         // Patient's answer text
-  flag            String?        // The flag that was raised, if any
-  timestamp       DateTime       @default(now())
-  questionnaireId String?
-  questionnaire   Questionnaire? @relation(fields: [questionnaireId], references: [id])
-}
-
-model Questionnaire {
-  id             String             @id @default(uuid())
-  patientId      String
-  patient        Patient            @relation(fields: [patientId], references: [id])
-  startedAt      DateTime           @default(now())
-  completedAt    DateTime?
-  isActive       Boolean            @default(true)
-  isPaused       Boolean            @default(false)
-  isCompleted    Boolean            @default(false)
-  responses      QuestionResponse[]
-}
-
-model Appointment {
-  id          String      @id @default(uuid())
-  patientId   String
-  title       String      // This will store the description
-  appointmentDate DateTime // This will store the combined date and time
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  
-  // Relations
-  patient     Patient     @relation(fields: [patientId], references: [id], onDelete: Cascade)
 }
