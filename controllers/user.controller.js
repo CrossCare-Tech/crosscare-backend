@@ -62,8 +62,8 @@ const getProfileDetails = async (req, res) => {
 // TODO: Replace with your actual Supabase credentials
 
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
 // Storage bucket name
 const STORAGE_BUCKET = 'crosscare';
