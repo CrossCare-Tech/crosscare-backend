@@ -6,6 +6,61 @@ import { v4 as uuidv4 } from "uuid";
 
 const prisma = new PrismaClient();
 
+// Approach 2: Due date based on current pregnancy stage with daily progression
+const calculatePregnancyProgress = (createdAt, manualWeek = 0, manualDay = 0, lastUpdated = null) => {
+    const today = new Date();
+    const accountCreationDate = new Date(createdAt);
+    
+    // If no manual week is set, start from account creation as Week 0
+    if (manualWeek === 0 && manualDay === 0) {
+        const daysSinceCreation = Math.floor((today - accountCreationDate) / (1000 * 60 * 60 * 24));
+        const currentWeek = Math.floor(daysSinceCreation / 7);
+        const currentDay = daysSinceCreation % 7;
+        
+        // Due date = today + remaining pregnancy time (40 weeks - current week)
+        const totalPregnancyDays = daysSinceCreation;
+        const remainingDays = Math.max(0, 280 - totalPregnancyDays);
+        const dueDate = new Date(today);
+        dueDate.setDate(today.getDate() + remainingDays);
+        
+        return {
+            currentWeek,
+            currentDay,
+            totalPregnancyDays,
+            remainingDays,
+            dueDate: dueDate.toISOString(),
+            daysSinceCreation: daysSinceCreation
+        };
+    }
+    
+    // If manual week is set, calculate progression from when it was last updated
+    const lastUpdateDate = lastUpdated ? new Date(lastUpdated) : accountCreationDate;
+    const daysSinceLastUpdate = Math.floor((today - lastUpdateDate) / (1000 * 60 * 60 * 24));
+    
+    // Calculate total pregnancy days from manual baseline + days since update
+    const manualPregnancyDays = (manualWeek * 7) + manualDay;
+    const totalPregnancyDays = manualPregnancyDays + daysSinceLastUpdate;
+    
+    // Calculate current week and day
+    const currentWeek = Math.floor(totalPregnancyDays / 7);
+    const currentDay = totalPregnancyDays % 7;
+    
+    // Due date = today + remaining pregnancy time
+    const remainingDays = Math.max(0, 280 - totalPregnancyDays);
+    const dueDate = new Date(today);
+    dueDate.setDate(today.getDate() + remainingDays);
+    
+    return {
+        currentWeek,
+        currentDay,
+        totalPregnancyDays,
+        remainingDays,
+        dueDate: dueDate.toISOString(),
+        daysSinceCreation: Math.floor((today - accountCreationDate) / (1000 * 60 * 60 * 24)),
+        daysSinceLastUpdate
+    };
+};
+
 const getProfileDetails = async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1]; // Get token from Authorization header
 
@@ -51,8 +106,31 @@ const getProfileDetails = async (req, res) => {
             return res.status(404).json({ message: "User not found" });
         }
 
-        // Return the user profile details
-        res.status(200).json(user);
+        // Calculate current pregnancy progress with daily progression
+        const pregnancyProgress = calculatePregnancyProgress(
+            user.createdAt,
+            user.week || 0,
+            user.day || 0,
+            user.updatedAt
+        );
+
+        // Return the user profile details with calculated pregnancy data
+        res.status(200).json({
+            ...user,
+            // Override stored week/day with calculated values
+            week: pregnancyProgress.currentWeek,
+            day: pregnancyProgress.currentDay,
+            // Add additional pregnancy information
+            pregnancyData: {
+                totalDays: pregnancyProgress.totalPregnancyDays,
+                remainingDays: pregnancyProgress.remainingDays,
+                dueDate: pregnancyProgress.dueDate,
+                daysSinceAccountCreation: pregnancyProgress.daysSinceCreation,
+                // Keep original stored values for reference
+                manuallySetWeek: user.week || 0,
+                manuallySetDay: user.day || 0
+            }
+        });
     } catch (error) {
         console.error("Error fetching profile details", error);
         res.status(500).json({ message: "Internal Server Error", details: error.message });
@@ -188,10 +266,10 @@ const updatePregnancyWeek = async (req, res) => {
     // Validate and add week if provided
     if (week !== undefined && week !== null) {
       const weekNumber = parseInt(week);
-      if (isNaN(weekNumber) || weekNumber < 1 || weekNumber > 42) {
+      if (isNaN(weekNumber) || weekNumber < 0 || weekNumber > 42) {
         return res.status(400).json({
           success: false,
-          message: "Pregnancy week must be a number between 1 and 42"
+          message: "Pregnancy week must be a number between 0 and 42"
         });
       }
       updateData.week = weekNumber;
@@ -201,10 +279,10 @@ const updatePregnancyWeek = async (req, res) => {
     if (day !== undefined && day !== null) {
       const dayNumber = parseInt(day);
       console.log('Day validation:', { day, dayNumber, isNaN: isNaN(dayNumber) });
-      if (isNaN(dayNumber) || dayNumber < 1 || dayNumber > 7) {
+      if (isNaN(dayNumber) || dayNumber < 0 || dayNumber > 6) {
         return res.status(400).json({
           success: false,
-          message: "Day must be a number between 1 and 7"
+          message: "Day must be a number between 0 and 6"
         });
       }
       updateData.day = dayNumber;
@@ -228,15 +306,33 @@ const updatePregnancyWeek = async (req, res) => {
       data: updateData
     });
     
-    // Return the updated patient data
+    // Calculate current pregnancy progress using the same logic
+    const pregnancyProgress = calculatePregnancyProgress(
+      patient.createdAt,
+      updatedPatient.week || 0,
+      updatedPatient.day || 0,
+      updatedPatient.updatedAt
+    );
+    
+    // Return the updated patient data with calculated values
     return res.status(200).json({
       success: true,
       message: "Pregnancy information updated successfully",
       data: {
         id: updatedPatient.id,
         name: updatedPatient.name,
-        week: updatedPatient.week,
-        day: updatedPatient.day
+        // Return calculated current values, not stored values
+        week: pregnancyProgress.currentWeek,
+        day: pregnancyProgress.currentDay,
+        pregnancyData: {
+          totalDays: pregnancyProgress.totalPregnancyDays,
+          remainingDays: pregnancyProgress.remainingDays,
+          dueDate: pregnancyProgress.dueDate,
+          daysSinceAccountCreation: pregnancyProgress.daysSinceCreation,
+          // Keep stored values for reference
+          manuallySetWeek: updatedPatient.week || 0,
+          manuallySetDay: updatedPatient.day || 0
+        }
       }
     });
     
