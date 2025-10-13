@@ -11,8 +11,8 @@ const QUESTIONNAIRE_DOMAINS = [
     questions: [
       {
         questionId: "q1-1",
-        text: "What is your current housing situation?",
-        possibleFlag: "Housing instability / temporary housing",
+        text: "Do you live in a house or an apartment?",
+        possibleFlag: "Housing situation",
         order: 1,
       },
       {
@@ -64,6 +64,12 @@ const QUESTIONNAIRE_DOMAINS = [
         order: 1.8,
       },
       {
+        questionId: "q1-2",
+        text: "Are you worried about losing your housing in the near future?",
+        possibleFlag: "Housing insecurity",
+        order: 2,
+      },
+      {
         questionId: "q1-smoke",
         text: "Does anyone who lives in the home or that you are around a lot smoke?",
         possibleFlag: "Smoke exposure risk",
@@ -71,7 +77,7 @@ const QUESTIONNAIRE_DOMAINS = [
       },
       {
         questionId: "q1-smoke-info",
-        text: "Record information, effects of second hand smoke, tips?",
+        text: "How to prevent second-hand smoke?",
         possibleFlag: "Second-hand smoke exposure - provided information",
         order: 2.2,
       },
@@ -83,9 +89,33 @@ const QUESTIONNAIRE_DOMAINS = [
       },
       {
         questionId: "q1-chemicals-info",
-        text: "Have them change their clothes, shoes, and shower before coming in the home. Do not wash their work clothes. Explain why-potential exposure to chemicals",
+        text: "Have them change their clothes, shoes and shower before coming in the home. Do not wash their work clothes. Explain why-potential exposure to chemicals",
         possibleFlag: "Chemical exposure - provided safety information",
         order: 2.4,
+      },
+      {
+        questionId: "q1-3",
+        text: "Have any utility companies threatened to shut off your services?",
+        possibleFlag: "Utilities support needed",
+        order: 3,
+      },
+      {
+        questionId: "q1-4",
+        text: "Any trouble getting to medical appointments or work due to transportation?",
+        possibleFlag: "Transportation barrier",
+        order: 4,
+      },
+      {
+        questionId: "q1-5",
+        text: "Do you feel safe where you live?",
+        possibleFlag: "Home safety concern",
+        order: 5,
+      },
+      {
+        questionId: "q1-6",
+        text: "Any concerns about your neighborhood, or safety?",
+        possibleFlag: "Neighborhood safety concern",
+        order: 6,
       },
       {
         questionId: "q1-neighborhood",
@@ -119,7 +149,7 @@ const QUESTIONNAIRE_DOMAINS = [
       },
       {
         questionId: "q1-exhaust-info",
-        text: "Trucks and car exaust can put out harmful chemicals",
+        text: "Trucks and car's exhaust can put out harmful chemicals",
         possibleFlag: "Air quality education provided",
         order: 6.6,
       },
@@ -153,43 +183,13 @@ const QUESTIONNAIRE_DOMAINS = [
         possibleFlag: "Air quality education provided",
         order: 6.92,
       },
-      {
-        questionId: "q1-2",
-        text: "Are you worried about losing your housing in the near future?",
-        possibleFlag: "Housing insecurity",
-        order: 2,
-      },
-      {
-        questionId: "q1-3",
-        text: "Have any utility companies threatened to shut off your services?",
-        possibleFlag: "Utilities support needed",
-        order: 3,
-      },
-      {
-        questionId: "q1-4",
-        text: "Any trouble getting to medical appointments or work due to transportation?",
-        possibleFlag: "Transportation barrier",
-        order: 4,
-      },
-      {
-        questionId: "q1-5",
-        text: "Do you feel safe where you live?",
-        possibleFlag: "Home safety concern",
-        order: 5,
-      },
-      {
-        questionId: "q1-6",
-        text: "Any concerns about your neighborhood, or safety?",
-        possibleFlag: "Neighborhood safety concern",
-        order: 6,
-      },
     ],
   },
   {
     id: "domain-2",
     name: "domain-2",
     title: "DOMAIN II",
-    description: "Safety & Demographics",
+    description: "Safety & Demographics & Transportation",
     order: 2,
     questions: [
       {
@@ -225,7 +225,7 @@ const QUESTIONNAIRE_DOMAINS = [
       {
         questionId: "q2-6",
         text: "How do you get to and from work, doctor appointments, and the grocery store?",
-        possibleFlag: "Transportation",
+        possibleFlag: null,
         order: 6,
       },
       {
@@ -248,26 +248,20 @@ const QUESTIONNAIRE_DOMAINS = [
       },
       {
         questionId: "q2-10",
-        text: "If transporatio is unreliable, she has to walk or take the bus ask if she has a plan to do something differently when the baby comes",
+        text: "If transportation is unreliable, do you have a plan to do something differently when the baby comes?",
         possibleFlag: "Transportation support needed",
         order: 10,
       },
       {
         questionId: "q2-11",
-        text:"Are there any traditions or beliefs about pregnancy in you culture?",
+        text: "Are there any traditions or beliefs about pregnancy in your culture?",
         possibleFlag: "Cultural beliefs",
         order: 11,
       },
       {
-        questionId: "q2-12",
-        text: "Activities that you should or shoulnt do during pregnancy",
-        possibleFlag: "Pregnancy education",
-        order: 12,
-      },
-      {
         questionId: "q2-13",
-        text: "Any foods that you should or shouldnt eat durning pregnancy in your culture",
-        possibleFlag: "Cultural",
+        text: "Avoid heavy lifting or strenuous physical labor. Do not consume alcohol, tobacco, or recreational drugs. Skip contact sports or activities with fall risk",
+        possibleFlag: null,
         order: 13,
       },
     ],
@@ -482,24 +476,6 @@ const QUESTIONNAIRE_DOMAINS = [
         text: "Do you have any stress connected to your children?",
         possibleFlag: null,
         order: 8.0,
-      },
-      {
-        questionId: "q3-4",
-        text: "Would you like help finding a job?",
-        possibleFlag: "Referral to workforce navigator",
-        order: 4,
-      },
-      {
-        questionId: "q3-5",
-        text: "Interested in help with school or job training?",
-        possibleFlag: "Education support",
-        order: 5,
-      },
-      {
-        questionId: "q3-6",
-        text: "Do you need better daycare?",
-        possibleFlag: "Childcare need",
-        order: 6,
       },
     ],
   },
@@ -717,14 +693,39 @@ const QUESTIONNAIRE_DOMAINS = [
 
 async function main() {
   console.log('Seeding database...');
+  console.log('Prisma client:', typeof prisma, prisma ? 'initialized' : 'undefined');
+  console.log('Domains to process:', QUESTIONNAIRE_DOMAINS.length);
 
-  // Create domains and their questions
-   for (const domain of QUESTIONNAIRE_DOMAINS) {
+  // First, create all domains
+  for (const domain of QUESTIONNAIRE_DOMAINS) {
     const { questions, ...domainData } = domain;
     
-    console.log(`Processing domain: ${domainData.title}`);
+    try {
+      // Check if domain already exists
+      const existingDomain = await prisma.questionnaireDomain.findUnique({
+        where: { id: domainData.id },
+      });
+      
+      if (existingDomain) {
+        console.log(`Domain ${domainData.title} already exists, skipping`);
+      } else {
+        // Create the domain
+        await prisma.questionnaireDomain.create({
+          data: domainData,
+        });
+        console.log(`Created domain: ${domainData.title}`);
+      }
+    } catch (error) {
+      console.log(`Error creating domain ${domainData.title}: ${error.message}`);
+    }
+  }
+
+  // Then create all questions for each domain
+  for (const domain of QUESTIONNAIRE_DOMAINS) {
+    const { questions, ...domainData } = domain;
     
-    // Process questions for domain regardless of whether domain already exists
+    console.log(`Processing questions for domain: ${domainData.title}`);
+    
     for (const question of questions) {
       try {
         // Check if the question already exists
