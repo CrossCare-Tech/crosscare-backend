@@ -32,6 +32,9 @@ const getMetricsSummary = async (req, res) => {
       }),
       prisma.patientActivity.aggregate({
         where: {
+          date: {
+            gte: sinceDate,
+          },
           water: {
             not: null,
           },
@@ -42,6 +45,9 @@ const getMetricsSummary = async (req, res) => {
       }),
       prisma.patientActivity.findMany({
         where: {
+          date: {
+            gte: sinceDate,
+          },
           sleepStart: {
             not: null,
           },
@@ -57,6 +63,9 @@ const getMetricsSummary = async (req, res) => {
       prisma.questionnaire.count({
         where: {
           isCompleted: true,
+          completedAt: {
+            gte: sinceDate,
+          },
         },
       }),
     ]);
