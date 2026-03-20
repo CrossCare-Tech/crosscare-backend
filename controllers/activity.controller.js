@@ -24,6 +24,7 @@ const getUserActivities = async (req, res) => {
             water: 0,
             waterGoal: activity.waterGoal || 0, // ✅ Include goal
             heart: 0,
+            glucose: { value: 0, unit: "mg/dL", mealContext: null },
             sleep: { start: null, end: null },
             steps: 0,
             stepsGoal: activity.stepsGoal || 0, // ✅ Include goal
@@ -38,6 +39,12 @@ const getUserActivities = async (req, res) => {
         acc[date].details.heart,
         activity.heart_rate || 0
       );
+      acc[date].details.glucose.value =
+        activity.glucoseLevel || acc[date].details.glucose.value;
+      acc[date].details.glucose.unit =
+        activity.glucoseUnit || acc[date].details.glucose.unit;
+      acc[date].details.glucose.mealContext =
+        activity.glucoseMealContext || acc[date].details.glucose.mealContext;
       acc[date].details.steps += activity.steps || 0;
       acc[date].details.weight.value =
         activity.weight || acc[date].details.weight.value;
@@ -140,6 +147,8 @@ const findOrCreateActivity = async (patientId) => {
         steps: 0,
         stepsGoal: patient.stepsGoal , // No default for steps
         heart_rate: 0,
+        glucoseLevel: null,
+        glucoseUnit: "mg/dL",
         weight: null,
         calorieGoal: patient.calorieGoal, // Default to 2000 calories
         caloriesConsumed: 0,
@@ -1778,6 +1787,164 @@ const getHeartRate = async (req, res) => {
       .json({ message: "Error retrieving heart rate", error: error.message });
   }
 };
+
+const logGlucose = async (req, res) => {
+  const { id } = req.params;
+  const {
+    glucoseLevel,
+    glucoseUnit = "mg/dL",
+    glucoseMealContext = null,
+  } = req.body;
+
+  if (glucoseLevel === undefined || glucoseLevel === null || isNaN(glucoseLevel)) {
+    return res.status(400).json({
+      message: "Invalid glucose value. Must be a number.",
+    });
+  }
+
+  try {
+    if (req.userId !== String(id)) {
+      return res.status(403).json({ message: "Unauthorized access to glucose data." });
+    }
+
+    const patient = await prisma.patient.findUnique({
+      where: { id: String(id) },
+    });
+
+    if (!patient) {
+      return res.status(400).json({ message: "Patient not found." });
+    }
+
+    const activity = await findOrCreateActivity(id);
+
+    const updatedActivity = await prisma.patientActivity.update({
+      where: {
+        id: activity.id,
+      },
+      data: {
+        glucoseLevel: Number(glucoseLevel),
+        glucoseUnit,
+        glucoseMealContext,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      glucoseLevel: updatedActivity.glucoseLevel,
+      glucoseUnit: updatedActivity.glucoseUnit,
+      glucoseMealContext: updatedActivity.glucoseMealContext,
+      date: updatedActivity.date.toISOString().split("T")[0],
+    });
+  } catch (error) {
+    console.error("Error logging glucose:", error);
+    res.status(500).json({
+      message: "Error logging glucose",
+      error: error.message,
+    });
+  }
+};
+
+const getGlucoseStatus = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    if (req.userId !== String(id)) {
+      return res.status(403).json({ message: "Unauthorized access to glucose data." });
+    }
+
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(today.getDate() - 6);
+
+    const activities = await prisma.patientActivity.findMany({
+      where: {
+        patientId: String(id),
+        date: {
+          gte: sevenDaysAgo,
+          lte: today,
+        },
+      },
+      orderBy: { date: "asc" },
+    });
+
+    const formatDateYYYYMMDD = (date) => date.toISOString().split("T")[0];
+
+    let lastLoggedGlucose = null;
+    let lastLoggedGlucoseUnit = "mg/dL";
+    let lastMealContext = null;
+    const todayKey = formatDateYYYYMMDD(today);
+    const todayActivity = activities.find(
+      (activity) => formatDateYYYYMMDD(activity.date) === todayKey
+    );
+
+    const glucoseData = [];
+    for (let i = 0; i < 7; i++) {
+      const currentDate = new Date(sevenDaysAgo);
+      currentDate.setDate(sevenDaysAgo.getDate() + i);
+      const dateKey = formatDateYYYYMMDD(currentDate);
+
+      const activity = activities.find(
+        (act) => formatDateYYYYMMDD(act.date) === dateKey
+      );
+
+      if (activity && activity.glucoseLevel !== null) {
+        lastLoggedGlucose = activity.glucoseLevel;
+        lastLoggedGlucoseUnit = activity.glucoseUnit || "mg/dL";
+        lastMealContext = activity.glucoseMealContext || null;
+      }
+
+      glucoseData.push({
+        day: currentDate.toLocaleDateString("en-US", { weekday: "short" }),
+        date: dateKey,
+        glucoseLevel:
+          activity && activity.glucoseLevel !== null
+            ? activity.glucoseLevel
+            : null,
+        glucoseUnit:
+          activity?.glucoseUnit || lastLoggedGlucoseUnit,
+        glucoseMealContext:
+          activity?.glucoseMealContext || null,
+      });
+    }
+
+    const lastActivity =
+      activities.length > 0 ? activities[activities.length - 1] : null;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        lastGlucose:
+          lastActivity?.glucoseLevel !== null &&
+          lastActivity?.glucoseLevel !== undefined
+            ? lastActivity.glucoseLevel
+            : lastLoggedGlucose,
+        glucoseUnit:
+          lastActivity?.glucoseUnit || lastLoggedGlucoseUnit || "mg/dL",
+        glucoseMealContext:
+          lastActivity?.glucoseMealContext || lastMealContext,
+        todayGlucose:
+          todayActivity?.glucoseLevel !== null &&
+          todayActivity?.glucoseLevel !== undefined
+            ? todayActivity.glucoseLevel
+            : null,
+        todayGlucoseUnit: todayActivity?.glucoseUnit || "mg/dL",
+        todayGlucoseMealContext:
+          todayActivity?.glucoseMealContext || null,
+        glucoseData,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching glucose status:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching glucose status",
+      error: error.message,
+    });
+  }
+};
+
 
 // Log Steps
 const logSteps = async (req, res) => {
@@ -4742,12 +4909,14 @@ export default {
   logSleepDuration,
   getSleepStatus,
   logHeartRate,
+  logGlucose,
   logSteps,
   logWeight,
   StepsGoal,
   createNote,
   editNote,
   getHeartRate,
+  getGlucoseStatus,
   getWeightStatus,
   deleteSleepStatus,
   getUserNotes,

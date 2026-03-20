@@ -91,7 +91,19 @@ model PatientActivity {
   sleepStart       DateTime?
   sleepEnd         DateTime?
   heart_rate       Float?
+  anxietyLevel     Int?
+  bloodPressureDiastolic Int?
+  bloodPressureSystolic Int?
+  energyLevel      Int?
+  glucoseLevel     Float?
+  glucoseMealContext String?
+  glucoseUnit      String?
+  moodLevel        Int?
+  moodNotes        String?
   notetaking       String?
+  stressLevel      Int?
+  temperature      Float?
+  temperatureUnit  String?
   wombPicture      String?
   calorieGoal      Int?
   caloriesConsumed Int?
