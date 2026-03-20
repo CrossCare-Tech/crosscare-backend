@@ -4,8 +4,6 @@ import authenticateMiddleware from "../middleware/auth.middleware.js";
 
 const router = new Router();
 
-router.get('/metrics/summary', activityController.getMetricsSummary);
-
 // Route to create a new user activity
 router.post('/user/activity/:id/water', activityController.logWaterIntake);
 router.post('/user/activity/:id/waterGoal', activityController.WaterGoal);

@@ -5,108 +5,6 @@ import { createClient } from "@supabase/supabase-js";
 import multer from "multer";
 import { v4 as uuidv4 } from "uuid";
 
-const getMetricsSummary = async (req, res) => {
-  const sinceDays = Number.parseInt(req.query.sinceDays, 10) || 30;
-  const sinceDate = new Date();
-  sinceDate.setDate(sinceDate.getDate() - sinceDays);
-
-  try {
-    const [
-      totalUsers,
-      recentActivities,
-      waterAggregate,
-      sleepActivities,
-      questionnaireCompletionCount,
-    ] = await Promise.all([
-      prisma.patient.count(),
-      prisma.patientActivity.findMany({
-        where: {
-          date: {
-            gte: sinceDate,
-          },
-        },
-        select: {
-          patientId: true,
-        },
-        distinct: ["patientId"],
-      }),
-      prisma.patientActivity.aggregate({
-        where: {
-          date: {
-            gte: sinceDate,
-          },
-          water: {
-            not: null,
-          },
-        },
-        _avg: {
-          water: true,
-        },
-      }),
-      prisma.patientActivity.findMany({
-        where: {
-          date: {
-            gte: sinceDate,
-          },
-          sleepStart: {
-            not: null,
-          },
-          sleepEnd: {
-            not: null,
-          },
-        },
-        select: {
-          sleepStart: true,
-          sleepEnd: true,
-        },
-      }),
-      prisma.questionnaire.count({
-        where: {
-          isCompleted: true,
-          completedAt: {
-            gte: sinceDate,
-          },
-        },
-      }),
-    ]);
-
-    const sleepDurationsInHours = sleepActivities
-      .map((activity) => {
-        const start = new Date(activity.sleepStart);
-        const end = new Date(activity.sleepEnd);
-        const durationMs = end - start;
-
-        return durationMs > 0 ? durationMs / (1000 * 60 * 60) : null;
-      })
-      .filter((duration) => duration !== null);
-
-    const averageSleepHours = sleepDurationsInHours.length
-      ? sleepDurationsInHours.reduce((sum, duration) => sum + duration, 0) /
-        sleepDurationsInHours.length
-      : 0;
-
-    res.status(200).json({
-      summary: {
-        totalUsers,
-        activeUsers: recentActivities.length,
-        averageWaterIntake: Number((waterAggregate._avg.water ?? 0).toFixed(2)),
-        averageSleepHours: Number(averageSleepHours.toFixed(2)),
-        questionnaireCompletionCount,
-      },
-      meta: {
-        activeUserWindowDays: sinceDays,
-        generatedAt: new Date().toISOString(),
-      },
-    });
-  } catch (error) {
-    console.error("Error fetching metrics summary:", error);
-    res.status(500).json({
-      message: "Internal Server Error",
-      details: error.message,
-    });
-  }
-};
-
 // Fetch user activities
 const getUserActivities = async (req, res) => {
   const { id } = req.params;
@@ -4653,7 +4551,6 @@ const updateFoodItemQuantity = async (req, res) => {
 };
 
 export default {
-  getMetricsSummary,
   getUserActivities,
   logWaterIntake,
   getUserGoals,
