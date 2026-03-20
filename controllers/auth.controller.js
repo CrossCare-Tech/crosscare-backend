@@ -50,9 +50,17 @@ const login = async (req, res) => {
             return res.status(403).json({ message: "Invalid doctor credentials" });
         }
 
+        // Use updated_at as the patient's last-login marker.
+        const updatedUser = await prisma.patient.update({
+            where: { id: user.id },
+            data: {
+                updatedAt: new Date(),
+            },
+        });
+
         // Generate an access token (JWT)
         const accessToken = jwt.sign(
-            { userId: user.id, email: user.email, name: user.name, doctorId: user.doctorId },  // Payload with userId, email, username, and doctorId (if available)
+            { userId: updatedUser.id, email: updatedUser.email, name: updatedUser.name, doctorId: updatedUser.doctorId },  // Payload with userId, email, username, and doctorId (if available)
             process.env.JWT_SECRET,  // Secret key (ensure it's defined in .env)
             { expiresIn: '23h' }  // Expiration time (1 hour)
         );
@@ -61,12 +69,12 @@ const login = async (req, res) => {
         res.status(200).json({
             message: "Login successful",
             accessToken,
-            userId: user.id,
-            patientId: user.id,
-            email: user.email,
-            name: user.name,
-            profilePicture: user.profileImage,
-            doctorId: user.doctorId,
+            userId: updatedUser.id,
+            patientId: updatedUser.id,
+            email: updatedUser.email,
+            name: updatedUser.name,
+            profilePicture: updatedUser.profileImage,
+            doctorId: updatedUser.doctorId,
         });
     } catch (error) {
         console.error("Login Error", error);  // Log the error to help debugging
