@@ -400,6 +400,18 @@ enum BadgeType {
   HOT_MAMA
 }
 
+// Model to store user session metrics (app usage duration, timestamps)
+model SessionMetric {
+  id         String   @id @default(uuid())
+  patientId  String
+  durationMs Int      @map("duration_ms")
+  timestamp  DateTime @default(now())
+
+  patient    Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("session_metrics")
+}
+
 enum MealType {
   BREAKFAST
   LUNCH
