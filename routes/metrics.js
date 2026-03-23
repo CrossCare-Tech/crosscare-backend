@@ -92,4 +92,42 @@ router.get("/session/summary/today", authenticateToken, async (req, res) => {
   }
 });
 
+// GET simple: total seconds logged in today + last logout time
+// GET /api/metrics/session/today-simple
+router.get("/session/today-simple", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.userId || req.user?.id;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0,0,0,0);
+    const endOfDay = new Date(startOfDay);
+    endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
+
+    const sessionsToday = await prisma.sessionMetric.findMany({
+      where: {
+        patientId: userId,
+        timestamp: { gte: startOfDay, lt: endOfDay }
+      },
+      orderBy: { timestamp: "desc" }
+    });
+
+    const totalSeconds = Math.floor(
+      sessionsToday.reduce((sum, s) => sum + s.durationMs, 0) / 1000
+    );
+    const lastLogout = sessionsToday.length > 0 ? sessionsToday[0].timestamp : null;
+    const sessionCount = sessionsToday.length;
+
+    res.json({
+      totalSeconds,
+      lastLogout,
+      sessionCount,
+      humanReadable: `${Math.floor(totalSeconds / 3600)}h ${Math.floor((totalSeconds % 3600) / 60)}m ${totalSeconds % 60}s`
+    });
+  } catch (err) {
+    console.error('Failed to fetch today simple', err);
+    res.status(500).json({ error: 'Failed to fetch today simple' });
+  }
+});
+
 export default router;
