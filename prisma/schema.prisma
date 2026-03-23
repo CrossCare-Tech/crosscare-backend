@@ -36,6 +36,7 @@ model Patient {
   questionResponses      QuestionResponse[]
   questionnaires         Questionnaire[]
   savedMealTemplates     SavedMealTemplate[]
+  sessionMetrics         SessionMetric[]
 }
 
 model Doctor {
