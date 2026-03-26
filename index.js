@@ -58,6 +58,25 @@ app.use('/api', badgeRoutes);
 // Doctor Routes
 // app.use('/api', doctorAuthRoutes);
 
+// 404 handler - must be after all routes
+app.use((req, res, next) => {
+    res.status(404).json({
+        success: false,
+        message: `Route ${req.originalUrl} not found`
+    });
+});
+
+// Global error handler - must be last middleware
+app.use((err, req, res, next) => {
+    console.error('Error:', err.message);
+    console.error('Stack:', err.stack);
+
+    res.status(err.status || 500).json({
+        success: false,
+        message: err.message || 'Internal server error'
+    });
+});
+
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 });

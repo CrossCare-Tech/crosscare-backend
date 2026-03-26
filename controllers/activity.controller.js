@@ -4382,6 +4382,276 @@ const updateFoodItemQuantity = async (req, res) => {
   }
 };
 
+// ==================== MOOD ENDPOINTS ====================
+
+const logMood = async (req, res) => {
+  const { id } = req.params;
+  const { moodLevel, stressLevel, anxietyLevel, energyLevel, notes } = req.body;
+
+  const validMoodLevels = ["VERY_LOW", "LOW", "MODERATE", "HIGH", "VERY_HIGH"];
+  if (moodLevel && !validMoodLevels.includes(moodLevel)) {
+    return res.status(400).json({
+      message: "Invalid mood level. Must be one of: " + validMoodLevels.join(", "),
+    });
+  }
+
+  if (stressLevel !== undefined && (stressLevel < 1 || stressLevel > 10)) {
+    return res.status(400).json({ message: "Stress level must be between 1-10" });
+  }
+  if (anxietyLevel !== undefined && (anxietyLevel < 1 || anxietyLevel > 10)) {
+    return res.status(400).json({ message: "Anxiety level must be between 1-10" });
+  }
+  if (energyLevel !== undefined && (energyLevel < 1 || energyLevel > 10)) {
+    return res.status(400).json({ message: "Energy level must be between 1-10" });
+  }
+
+  try {
+    const patientExists = await prisma.patient.findUnique({
+      where: { id: id },
+    });
+
+    if (!patientExists) {
+      return res.status(400).json({ message: "Patient not found." });
+    }
+
+    const activity = await findOrCreateActivity(id);
+
+    const updateData = {};
+    if (moodLevel !== undefined) updateData.moodLevel = moodLevel;
+    if (stressLevel !== undefined) updateData.stressLevel = stressLevel;
+    if (anxietyLevel !== undefined) updateData.anxietyLevel = anxietyLevel;
+    if (energyLevel !== undefined) updateData.energyLevel = energyLevel;
+    if (notes !== undefined) updateData.moodNotes = notes;
+
+    const updatedActivity = await prisma.patientActivity.update({
+      where: { id: activity.id },
+      data: updateData,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Mood logged successfully",
+      data: {
+        moodLevel: updatedActivity.moodLevel,
+        stressLevel: updatedActivity.stressLevel,
+        anxietyLevel: updatedActivity.anxietyLevel,
+        energyLevel: updatedActivity.energyLevel,
+        moodNotes: updatedActivity.moodNotes,
+        date: updatedActivity.date.toISOString().split("T")[0],
+      },
+    });
+  } catch (error) {
+    console.error("Error logging mood:", error);
+    res.status(500).json({ message: "Error logging mood", error: error.message });
+  }
+};
+
+const getMoodHistory = async (req, res) => {
+  const { id } = req.params;
+  const { days = 7 } = req.query;
+
+  try {
+    const today = new Date();
+    today.setUTCHours(23, 59, 59, 999);
+
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() - (parseInt(days) - 1));
+    startDate.setUTCHours(0, 0, 0, 0);
+
+    const activities = await prisma.patientActivity.findMany({
+      where: {
+        patientId: String(id),
+        date: { gte: startDate, lte: today },
+      },
+      orderBy: { date: "asc" },
+      select: {
+        id: true,
+        date: true,
+        moodLevel: true,
+        stressLevel: true,
+        anxietyLevel: true,
+        energyLevel: true,
+        moodNotes: true,
+      },
+    });
+
+    const moodData = activities
+      .filter((a) => a.moodLevel !== null)
+      .map((activity) => ({
+        id: activity.id,
+        date: activity.date.toISOString().split("T")[0],
+        day: activity.date.toLocaleDateString("en-US", { weekday: "short" }),
+        moodLevel: activity.moodLevel,
+        stressLevel: activity.stressLevel,
+        anxietyLevel: activity.anxietyLevel,
+        energyLevel: activity.energyLevel,
+        notes: activity.moodNotes,
+      }));
+
+    res.status(200).json({
+      moodHistory: moodData,
+      summary: {
+        totalEntries: moodData.length,
+        averageStress:
+          moodData.length > 0
+            ? (moodData.reduce((sum, m) => sum + (m.stressLevel || 0), 0) / moodData.filter((m) => m.stressLevel).length).toFixed(1)
+            : null,
+        averageEnergy:
+          moodData.length > 0
+            ? (moodData.reduce((sum, m) => sum + (m.energyLevel || 0), 0) / moodData.filter((m) => m.energyLevel).length).toFixed(1)
+            : null,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching mood history:", error);
+    res.status(500).json({ message: "Error fetching mood history", error: error.message });
+  }
+};
+
+// ==================== SYMPTOMS ENDPOINTS ====================
+
+const logSymptom = async (req, res) => {
+  const { id } = req.params;
+  const { symptomType, severity, bodyLocation, duration, notes, date } = req.body;
+
+  if (!symptomType) {
+    return res.status(400).json({ message: "Symptom type is required" });
+  }
+
+  const validSeverities = ["NONE", "MILD", "MODERATE", "SEVERE"];
+  if (severity && !validSeverities.includes(severity)) {
+    return res.status(400).json({
+      message: "Invalid severity. Must be one of: " + validSeverities.join(", "),
+    });
+  }
+
+  try {
+    const patientExists = await prisma.patient.findUnique({
+      where: { id: id },
+    });
+
+    if (!patientExists) {
+      return res.status(400).json({ message: "Patient not found." });
+    }
+
+    const targetDate = date ? new Date(date) : new Date();
+    const activity = await findOrCreateActivityForDate(id, targetDate);
+
+    const symptom = await prisma.pregnancySymptom.create({
+      data: {
+        patientActivityId: activity.id,
+        symptomType: symptomType.toLowerCase(),
+        severity: severity || "MILD",
+        bodyLocation: bodyLocation || null,
+        duration: duration ? parseInt(duration) : null,
+        notes: notes || null,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Symptom logged successfully",
+      symptom: {
+        id: symptom.id,
+        symptomType: symptom.symptomType,
+        severity: symptom.severity,
+        bodyLocation: symptom.bodyLocation,
+        duration: symptom.duration,
+        notes: symptom.notes,
+        occurredAt: symptom.occurredAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error("Error logging symptom:", error);
+    res.status(500).json({ message: "Error logging symptom", error: error.message });
+  }
+};
+
+const getSymptoms = async (req, res) => {
+  const { id } = req.params;
+  const { days = 7 } = req.query;
+
+  try {
+    const today = new Date();
+    today.setUTCHours(23, 59, 59, 999);
+
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() - (parseInt(days) - 1));
+    startDate.setUTCHours(0, 0, 0, 0);
+
+    const activities = await prisma.patientActivity.findMany({
+      where: {
+        patientId: String(id),
+        date: { gte: startDate, lte: today },
+      },
+      include: {
+        pregnancySymptoms: {
+          orderBy: { occurredAt: "desc" },
+        },
+      },
+      orderBy: { date: "desc" },
+    });
+
+    const symptoms = activities.flatMap((activity) =>
+      activity.pregnancySymptoms.map((s) => ({
+        id: s.id,
+        date: activity.date.toISOString().split("T")[0],
+        symptomType: s.symptomType,
+        severity: s.severity,
+        bodyLocation: s.bodyLocation,
+        duration: s.duration,
+        notes: s.notes,
+        occurredAt: s.occurredAt.toISOString(),
+      }))
+    );
+
+    const symptomCounts = symptoms.reduce((acc, s) => {
+      acc[s.symptomType] = (acc[s.symptomType] || 0) + 1;
+      return acc;
+    }, {});
+
+    res.status(200).json({
+      symptoms,
+      summary: {
+        totalSymptoms: symptoms.length,
+        symptomCounts,
+        mostCommon: Object.entries(symptomCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching symptoms:", error);
+    res.status(500).json({ message: "Error fetching symptoms", error: error.message });
+  }
+};
+
+const deleteSymptom = async (req, res) => {
+  const { id, symptomId } = req.params;
+
+  try {
+    const symptom = await prisma.pregnancySymptom.findUnique({
+      where: { id: symptomId },
+      include: { patientActivity: true },
+    });
+
+    if (!symptom) {
+      return res.status(404).json({ message: "Symptom not found" });
+    }
+
+    if (symptom.patientActivity.patientId !== id) {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    await prisma.pregnancySymptom.delete({
+      where: { id: symptomId },
+    });
+
+    res.status(200).json({ success: true, message: "Symptom deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting symptom:", error);
+    res.status(500).json({ message: "Error deleting symptom", error: error.message });
+  }
+};
+
 export default {
   getUserActivities,
   logWaterIntake,
@@ -4419,4 +4689,9 @@ export default {
   deleteAppointment,
   deleteFoodItem,
   updateFoodItemQuantity,
+  logMood,
+  getMoodHistory,
+  logSymptom,
+  getSymptoms,
+  deleteSymptom,
 };

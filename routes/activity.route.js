@@ -73,4 +73,13 @@ router.get('/user/activity/:id/goals', activityController.getUserGoals);
 router.delete('/user/:userId/meals/:mealId/fooditems/:foodItemId', activityController.deleteFoodItem);
 router.put('/user/:userId/meals/:mealId/fooditems/:foodItemId/quantity', activityController.updateFoodItemQuantity);
 
+// Mood & Emotional Tracking
+router.post('/user/metrics/:id/mood', activityController.logMood);
+router.get('/user/metrics/:id/mood', activityController.getMoodHistory);
+
+// Symptoms Tracking
+router.post('/user/metrics/:id/symptom', activityController.logSymptom);
+router.get('/user/metrics/:id/symptoms', activityController.getSymptoms);
+router.delete('/user/metrics/:id/symptom/:symptomId', activityController.deleteSymptom);
+
 export default router;

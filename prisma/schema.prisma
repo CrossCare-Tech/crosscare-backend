@@ -98,11 +98,23 @@ model PatientActivity {
   badFoodCount     Int?
   waterGoal        Int?
   stepsGoal        Int?
+
+  // Mood & Emotional Tracking
+  moodLevel        MoodLevel?
+  stressLevel      Int?          // 1-10 scale
+  anxietyLevel     Int?          // 1-10 scale
+  energyLevel      Int?          // 1-10 scale
+  moodNotes        String?
+
+  // Existing relations
   medications      Medication[]
   noteTaking       NoteTaking[]
   patient          Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
   wombPictures     WombPicture[]
   meal             Meals[]
+
+  // New relations for health metrics
+  pregnancySymptoms PregnancySymptom[]
 }
 
 model WombPicture {
@@ -336,6 +348,23 @@ model Appointment {
   patient         Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
 }
 
+// Pregnancy Symptoms - Multiple symptoms per day
+model PregnancySymptom {
+  id                String           @id @default(uuid())
+  patientActivityId String
+  symptomType       String           // "nausea", "swelling", "headache", "cramping", "back_pain", etc.
+  severity          SymptomSeverity
+  bodyLocation      String?          // For pain/swelling location
+  duration          Int?             // In minutes
+  notes             String?
+  occurredAt        DateTime         @default(now())
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  patientActivity   PatientActivity  @relation(fields: [patientActivityId], references: [id], onDelete: Cascade)
+
+  @@map("pregnancy_symptoms")
+}
+
 enum HabitType {
   WATER
   SLEEP
@@ -426,4 +455,20 @@ enum IconType {
   cloud
   sun
   feather
+}
+
+// New enums for health metrics
+enum MoodLevel {
+  VERY_LOW
+  LOW
+  MODERATE
+  HIGH
+  VERY_HIGH
+}
+
+enum SymptomSeverity {
+  NONE
+  MILD
+  MODERATE
+  SEVERE
 }
