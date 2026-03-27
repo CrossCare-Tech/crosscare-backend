@@ -76,6 +76,8 @@ router.put('/user/:userId/meals/:mealId/fooditems/:foodItemId/quantity', activit
 // Mood & Emotional Tracking
 router.post('/user/metrics/:id/mood', activityController.logMood);
 router.get('/user/metrics/:id/mood', activityController.getMoodHistory);
+router.put('/user/metrics/:id/mood/:activityId', activityController.updateMood);
+router.delete('/user/metrics/:id/mood/:activityId', activityController.deleteMood);
 
 // Symptoms Tracking
 router.post('/user/metrics/:id/symptom', activityController.logSymptom);

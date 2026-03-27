@@ -4508,6 +4508,87 @@ const getMoodHistory = async (req, res) => {
   }
 };
 
+const updateMood = async (req, res) => {
+  const { id, activityId } = req.params;
+  const { moodLevel, stressLevel, energyLevel, notes } = req.body;
+
+  const validMoodLevels = ["VERY_LOW", "LOW", "MODERATE", "HIGH", "VERY_HIGH"];
+  if (moodLevel && !validMoodLevels.includes(moodLevel)) {
+    return res.status(400).json({
+      message: "Invalid mood level. Must be one of: " + validMoodLevels.join(", "),
+    });
+  }
+
+  try {
+    const activity = await prisma.patientActivity.findFirst({
+      where: { id: activityId, patientId: String(id) },
+    });
+
+    if (!activity) {
+      return res.status(404).json({ message: "Mood entry not found." });
+    }
+
+    const updateData = {};
+    if (moodLevel !== undefined) updateData.moodLevel = moodLevel;
+    if (stressLevel !== undefined) updateData.stressLevel = stressLevel;
+    if (energyLevel !== undefined) updateData.energyLevel = energyLevel;
+    if (notes !== undefined) updateData.moodNotes = notes;
+
+    const updated = await prisma.patientActivity.update({
+      where: { id: activityId },
+      data: updateData,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Mood updated successfully",
+      data: {
+        id: updated.id,
+        moodLevel: updated.moodLevel,
+        stressLevel: updated.stressLevel,
+        energyLevel: updated.energyLevel,
+        date: updated.date.toISOString().split("T")[0],
+      },
+    });
+  } catch (error) {
+    console.error("Error updating mood:", error);
+    res.status(500).json({ message: "Error updating mood", error: error.message });
+  }
+};
+
+const deleteMood = async (req, res) => {
+  const { id, activityId } = req.params;
+
+  try {
+    const activity = await prisma.patientActivity.findFirst({
+      where: { id: activityId, patientId: String(id) },
+    });
+
+    if (!activity) {
+      return res.status(404).json({ message: "Mood entry not found." });
+    }
+
+    await prisma.patientActivity.update({
+      where: { id: activityId },
+      data: {
+        moodLevel: null,
+        stressLevel: null,
+        anxietyLevel: null,
+        energyLevel: null,
+        moodNotes: null,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Mood deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting mood:", error);
+    res.status(500).json({ message: "Error deleting mood", error: error.message });
+  }
+};
+
 // ==================== SYMPTOMS ENDPOINTS ====================
 
 const logSymptom = async (req, res) => {
@@ -4691,6 +4772,8 @@ export default {
   updateFoodItemQuantity,
   logMood,
   getMoodHistory,
+  updateMood,
+  deleteMood,
   logSymptom,
   getSymptoms,
   deleteSymptom,
