@@ -24,6 +24,11 @@ const getUserActivities = async (req, res) => {
             water: 0,
             waterGoal: activity.waterGoal || 0, // ✅ Include goal
             heart: 0,
+            bloodPressure: {
+              systolic: null,
+              diastolic: null,
+              unit: "mmHg",
+            },
             glucose: { value: 0, unit: "mg/dL", mealContext: null },
             sleep: { start: null, end: null },
             steps: 0,
@@ -39,6 +44,12 @@ const getUserActivities = async (req, res) => {
         acc[date].details.heart,
         activity.heart_rate || 0
       );
+      if (activity.bloodPressureSystolic !== null && activity.bloodPressureSystolic !== undefined) {
+        acc[date].details.bloodPressure.systolic = activity.bloodPressureSystolic;
+      }
+      if (activity.bloodPressureDiastolic !== null && activity.bloodPressureDiastolic !== undefined) {
+        acc[date].details.bloodPressure.diastolic = activity.bloodPressureDiastolic;
+      }
       acc[date].details.glucose.value =
         activity.glucoseLevel || acc[date].details.glucose.value;
       acc[date].details.glucose.unit =
@@ -147,6 +158,8 @@ const findOrCreateActivity = async (patientId) => {
         steps: 0,
         stepsGoal: patient.stepsGoal , // No default for steps
         heart_rate: 0,
+        bloodPressureSystolic: null,
+        bloodPressureDiastolic: null,
         glucoseLevel: null,
         glucoseUnit: "mg/dL",
         weight: null,
@@ -1940,6 +1953,184 @@ const getGlucoseStatus = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Error fetching glucose status",
+      error: error.message,
+    });
+  }
+};
+
+const logBloodPressure = async (req, res) => {
+  const { id } = req.params;
+  const { systolic, diastolic } = req.body;
+
+  const parsedSystolic = Number(systolic);
+  const parsedDiastolic = Number(diastolic);
+
+  if (
+    !Number.isFinite(parsedSystolic) ||
+    !Number.isFinite(parsedDiastolic) ||
+    parsedSystolic <= 0 ||
+    parsedDiastolic <= 0
+  ) {
+    return res.status(400).json({
+      message: "Invalid blood pressure values. Systolic and diastolic must be positive numbers.",
+    });
+  }
+
+  try {
+    if (req.userId !== String(id)) {
+      return res.status(403).json({ message: "Unauthorized access to blood pressure data." });
+    }
+
+    const patient = await prisma.patient.findUnique({
+      where: { id: String(id) },
+    });
+
+    if (!patient) {
+      return res.status(400).json({ message: "Patient not found." });
+    }
+
+    const activity = await findOrCreateActivity(id);
+
+    const updatedActivity = await prisma.patientActivity.update({
+      where: { id: activity.id },
+      data: {
+        bloodPressureSystolic: Math.round(parsedSystolic),
+        bloodPressureDiastolic: Math.round(parsedDiastolic),
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      systolic: updatedActivity.bloodPressureSystolic,
+      diastolic: updatedActivity.bloodPressureDiastolic,
+      unit: "mmHg",
+      date: updatedActivity.date.toISOString().split("T")[0],
+    });
+  } catch (error) {
+    console.error("Error logging blood pressure:", error);
+    res.status(500).json({
+      message: "Error logging blood pressure",
+      error: error.message,
+    });
+  }
+};
+
+const getBloodPressureStatus = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    if (req.userId !== String(id)) {
+      return res.status(403).json({ message: "Unauthorized access to blood pressure data." });
+    }
+
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(today.getDate() - 6);
+
+    const activities = await prisma.patientActivity.findMany({
+      where: {
+        patientId: String(id),
+        date: {
+          gte: sevenDaysAgo,
+          lte: today,
+        },
+      },
+      orderBy: { date: "asc" },
+    });
+
+    const formatDateYYYYMMDD = (date) => date.toISOString().split("T")[0];
+    const todayKey = formatDateYYYYMMDD(today);
+    const todayActivity = activities.find(
+      (activity) => formatDateYYYYMMDD(activity.date) === todayKey
+    );
+
+    let lastSystolic = null;
+    let lastDiastolic = null;
+
+    const bloodPressureData = [];
+    for (let i = 0; i < 7; i++) {
+      const currentDate = new Date(sevenDaysAgo);
+      currentDate.setDate(sevenDaysAgo.getDate() + i);
+      const dateKey = formatDateYYYYMMDD(currentDate);
+
+      const activity = activities.find(
+        (act) => formatDateYYYYMMDD(act.date) === dateKey
+      );
+
+      if (
+        activity &&
+        activity.bloodPressureSystolic !== null &&
+        activity.bloodPressureSystolic !== undefined &&
+        activity.bloodPressureDiastolic !== null &&
+        activity.bloodPressureDiastolic !== undefined
+      ) {
+        lastSystolic = activity.bloodPressureSystolic;
+        lastDiastolic = activity.bloodPressureDiastolic;
+      }
+
+      bloodPressureData.push({
+        day: currentDate.toLocaleDateString("en-US", { weekday: "short" }),
+        date: dateKey,
+        systolic:
+          activity && activity.bloodPressureSystolic !== null
+            ? activity.bloodPressureSystolic
+            : null,
+        diastolic:
+          activity && activity.bloodPressureDiastolic !== null
+            ? activity.bloodPressureDiastolic
+            : null,
+        unit: "mmHg",
+      });
+    }
+
+    const lastActivity =
+      activities.length > 0 ? activities[activities.length - 1] : null;
+
+    const lastActivityHasBp =
+      lastActivity &&
+      lastActivity.bloodPressureSystolic !== null &&
+      lastActivity.bloodPressureSystolic !== undefined &&
+      lastActivity.bloodPressureDiastolic !== null &&
+      lastActivity.bloodPressureDiastolic !== undefined;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        lastBloodPressure: lastActivityHasBp
+          ? {
+              systolic: lastActivity.bloodPressureSystolic,
+              diastolic: lastActivity.bloodPressureDiastolic,
+              unit: "mmHg",
+            }
+          : lastSystolic !== null && lastDiastolic !== null
+          ? {
+              systolic: lastSystolic,
+              diastolic: lastDiastolic,
+              unit: "mmHg",
+            }
+          : null,
+        todayBloodPressure:
+          todayActivity &&
+          todayActivity.bloodPressureSystolic !== null &&
+          todayActivity.bloodPressureSystolic !== undefined &&
+          todayActivity.bloodPressureDiastolic !== null &&
+          todayActivity.bloodPressureDiastolic !== undefined
+            ? {
+                systolic: todayActivity.bloodPressureSystolic,
+                diastolic: todayActivity.bloodPressureDiastolic,
+                unit: "mmHg",
+              }
+            : null,
+        bloodPressureData,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching blood pressure status:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching blood pressure status",
       error: error.message,
     });
   }
@@ -4909,6 +5100,7 @@ export default {
   logSleepDuration,
   getSleepStatus,
   logHeartRate,
+  logBloodPressure,
   logGlucose,
   logSteps,
   logWeight,
@@ -4916,6 +5108,7 @@ export default {
   createNote,
   editNote,
   getHeartRate,
+  getBloodPressureStatus,
   getGlucoseStatus,
   getWeightStatus,
   deleteSleepStatus,
