@@ -18,6 +18,8 @@ router.get('/user/activity/:id/sleepstatus', activityController.getSleepStatus);
 router.delete('/user/activity/:id/sleepstatus/delete/:id', activityController.deleteSleepStatus);
 router.post('/user/activity/:id/heart', activityController.logHeartRate);
 router.get('/user/activity/:id/heartstatus', activityController.getHeartRate);
+router.post('/user/activity/:id/bp', authenticateMiddleware, activityController.logBloodPressure);
+router.get('/user/activity/:id/bpstatus', authenticateMiddleware, activityController.getBloodPressureStatus);
 router.post('/user/activity/:id/glucose', authenticateMiddleware, activityController.logGlucose);
 router.get('/user/activity/:id/glucosestatus', authenticateMiddleware, activityController.getGlucoseStatus);
 router.get('/user/activity/:id', activityController.getUserActivities);
