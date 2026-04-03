@@ -36,6 +36,7 @@ model Patient {
   questionResponses      QuestionResponse[]
   questionnaires         Questionnaire[]
   savedMealTemplates     SavedMealTemplate[]
+  aiEngagements          AiEngagement[]
 }
 
 model Doctor {
@@ -100,18 +101,27 @@ model PatientActivity {
   stepsGoal        Int?
 
   // Mood & Emotional Tracking
-  moodLevel        MoodLevel?
-  stressLevel      Int?          // 1-10 scale
-  anxietyLevel     Int?          // 1-10 scale
-  energyLevel      Int?          // 1-10 scale
-  moodNotes        String?
+  moodLevel              MoodLevel?
+  stressLevel            Int?          // 1-10 scale
+  anxietyLevel           Int?          // 1-10 scale
+  energyLevel            Int?          // 1-10 scale
+  moodNotes              String?
+
+  // Vitals 
+  bloodPressureSystolic  Int?
+  bloodPressureDiastolic Int?
+  glucoseLevel           Float?
+  glucoseMealContext     String?
+  glucoseUnit            String?
+  temperature            Float?
+  temperatureUnit        String?
 
   // Existing relations
-  medications      Medication[]
-  noteTaking       NoteTaking[]
-  patient          Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  wombPictures     WombPicture[]
-  meal             Meals[]
+  medications       Medication[]
+  noteTaking        NoteTaking[]
+  patient           Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  wombPictures      WombPicture[]
+  meal              Meals[]
 
   // New relations for health metrics
   pregnancySymptoms PregnancySymptom[]
@@ -365,6 +375,39 @@ model PregnancySymptom {
   @@map("pregnancy_symptoms")
 }
 
+model daily_analytics {
+  id                 String   @id
+  date               DateTime @unique @db.Date
+  activeUsers        Int      @default(0)
+  totalSessions      Int      @default(0)
+  avgSessionDuration Int      @default(0)
+  screenViews        Json?
+  featureUsage       Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime
+}
+
+model session_metrics {
+  id              String    @id
+  patientId       String
+  loginTime       DateTime  @default(now())
+  logoutTime      DateTime?
+  durationMinutes Float?
+}
+
+model AiEngagement {
+  id             String   @id @default(uuid())
+  patientId      String   @map("patient_id")
+  sessionStartAt DateTime @map("session_start_at")
+  sessionEndAt   DateTime @map("session_end_at")
+  durationMs     Int      @map("duration_ms")
+  messageCount   Int      @default(0) @map("message_count")
+  createdAt      DateTime @default(now()) @map("created_at")
+  patient        Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("ai_engagements")
+}
+
 enum HabitType {
   WATER
   SLEEP
@@ -472,3 +515,4 @@ enum SymptomSeverity {
   MODERATE
   SEVERE
 }
+
