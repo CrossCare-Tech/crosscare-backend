@@ -20,7 +20,7 @@ const engagementController = {
           patientId: id,
           sessionStartAt: new Date(sessionStartAt),
           sessionEndAt: new Date(sessionEndAt),
-          durationMs,
+          durationMs: parseFloat(((sessionEndAt - sessionStartAt) / 1000 /60 ).toFixed(2)),
           messageCount: messageCount || 0,
         },
       });
