@@ -15,12 +15,16 @@ const engagementController = {
         });
       }
 
+      sessionStartAt = new Date(sessionStartAt);
+      sessionEndAt =  new Date(sessionEndAt);
+      durationMs = parseFloat(((sessionEndAt - sessionStartAt) / 1000 / 60 ).toFixed(2));
+
       const engagement = await prisma.aiEngagement.create({
         data: {
           patientId: id,
-          sessionStartAt: new Date(sessionStartAt),
-          sessionEndAt: new Date(sessionEndAt),
-          durationMs: parseFloat(((sessionEndAt - sessionStartAt) / 1000 /60 ).toFixed(2)),
+          sessionStartAt: sessionStartAt,
+          sessionEndAt: sessionEndAt,
+          durationMs: durationMs,
           messageCount: messageCount || 0,
         },
       });
