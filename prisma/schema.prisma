@@ -13,6 +13,7 @@ model Patient {
   password               String
   createdAt              DateTime            @default(now()) @map("created_at")
   updatedAt              DateTime            @default(now()) @map("updated_at")
+  numberOfLogins         Int 
   name                   String
   phoneNumber            String?             @map("phone_number")
   age                    Int?
@@ -80,29 +81,44 @@ model HabitBadge {
 }
 
 model PatientActivity {
-  id               String        @id @default(uuid())
-  patientId        String        @map("user_id")
-  date             DateTime
-  weight           Float?
-  weight_unit      String?
-  water            Int?
-  steps            Int?
-  sleepStart       DateTime?
-  sleepEnd         DateTime?
-  heart_rate       Float?
-  notetaking       String?
-  wombPicture      String?
-  calorieGoal      Int?
-  caloriesConsumed Int?
-  goodFoodCount    Int?
-  badFoodCount     Int?
-  waterGoal        Int?
-  stepsGoal        Int?
-  medications      Medication[]
-  noteTaking       NoteTaking[]
-  patient          Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  wombPictures     WombPicture[]
-  meal             Meals[]
+  id                     String               @id @default(uuid())
+  patientId              String               @map("user_id")
+  date                   DateTime
+  weight                 Float?
+  weight_unit            String?
+  water                  Int?
+  steps                  Int?
+  sleepStart             DateTime?
+  sleepEnd               DateTime?
+  heart_rate             Float?
+  notetaking             String?
+  wombPicture            String?
+  calorieGoal            Int?
+  caloriesConsumed       Int?
+  goodFoodCount          Int?
+  badFoodCount           Int?
+  waterGoal              Int?
+  stepsGoal              Int?
+  anxietyLevel           Int?
+  bloodPressureDiastolic Int?
+  bloodPressureSystolic  Int?
+  energyLevel            Int?
+  glucoseLevel           Float?
+  glucoseMealContext     String?
+  glucoseUnit            String?
+  moodLevel              MoodLevel?
+  moodNotes              String?
+  stressLevel            Int?
+  temperature            Float?
+  temperatureUnit        String?
+  medications            Medication[]
+  noteTaking             NoteTaking[]
+  patient                Patient              @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  wombPictures           WombPicture[]
+  contractions           contractions[]
+  kick_counts            kick_counts[]
+  meal                   Meals[]
+  pregnancy_symptoms     pregnancy_symptoms[]
 }
 
 model WombPicture {
@@ -336,6 +352,77 @@ model Appointment {
   patient         Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
 }
 
+model analytics_events {
+  id        String   @id
+  patientId String?
+  eventType String
+  eventName String
+  metadata  Json?
+  sessionId String?
+  duration  Int?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([eventType])
+  @@index([patientId])
+}
+
+model contractions {
+  id                String            @id
+  patientActivityId String
+  startTime         DateTime
+  endTime           DateTime?
+  durationSeconds   Int?
+  intensity         Int?
+  intervalFromLast  Int?
+  phase             ContractionPhase?
+  notes             String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime
+  PatientActivity   PatientActivity   @relation(fields: [patientActivityId], references: [id], onDelete: Cascade)
+}
+
+model daily_analytics {
+  id                 String   @id
+  date               DateTime @unique @db.Date
+  activeUsers        Int      @default(0)
+  totalSessions      Int      @default(0)
+  avgSessionDuration Int      @default(0)
+  screenViews        Json?
+  featureUsage       Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime
+}
+
+model kick_counts {
+  id                String          @id
+  patientActivityId String
+  startTime         DateTime
+  endTime           DateTime?
+  kickCount         Int             @default(0)
+  targetKicks       Int             @default(10)
+  sessionCompleted  Boolean         @default(false)
+  movementPattern   String?
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime
+  PatientActivity   PatientActivity @relation(fields: [patientActivityId], references: [id], onDelete: Cascade)
+}
+
+model pregnancy_symptoms {
+  id                String          @id
+  patientActivityId String
+  symptomType       String
+  severity          SymptomSeverity
+  bodyLocation      String?
+  duration          Int?
+  notes             String?
+  occurredAt        DateTime        @default(now())
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime
+  PatientActivity   PatientActivity @relation(fields: [patientActivityId], references: [id], onDelete: Cascade)
+}
+
 enum HabitType {
   WATER
   SLEEP
@@ -426,4 +513,25 @@ enum IconType {
   cloud
   sun
   feather
+}
+
+enum ContractionPhase {
+  EARLY
+  ACTIVE
+  TRANSITION
+}
+
+enum MoodLevel {
+  VERY_LOW
+  LOW
+  MODERATE
+  HIGH
+  VERY_HIGH
+}
+
+enum SymptomSeverity {
+  NONE
+  MILD
+  MODERATE
+  SEVERE
 }
