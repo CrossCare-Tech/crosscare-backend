@@ -18,7 +18,7 @@
     "@prisma/client": "^6.8.2",
     "@sendgrid/mail": "^8.1.5",
     "@supabase/supabase-js": "^2.49.1",
-    "aws-sdk": "^2.1692.0",
+    "aws-sdk": "^2.1693.0",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "crypto-random-string": "^5.0.0",

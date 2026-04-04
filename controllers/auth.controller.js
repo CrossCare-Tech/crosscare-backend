@@ -14,6 +14,8 @@ const login = async (req, res) => {
     try {
         const { email, name, password, doctorId } = req.body;
         console.log("Hi");
+        const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : undefined;
+        const normalizedName = typeof name === 'string' ? name.trim() : undefined;
 
         // Check if the username or email exists in the database
         const user = await prisma.patient.findFirst({
@@ -21,6 +23,8 @@ const login = async (req, res) => {
                 OR: [
                     { email: email },
                     { name: name },
+                    ...(normalizedEmail ? [{ email: { equals: normalizedEmail, mode: 'insensitive' } }] : []),
+                    ...(normalizedName ? [{ name: normalizedName }] : []),
                 ],
             },
         });
@@ -58,14 +62,22 @@ const login = async (req, res) => {
                 }
             });
 
+        // Use updated_at as the patient's last-login marker.
+        const updatedUser = await prisma.patient.update({
+            where: { id: user.id },
+            data: {
+                updatedAt: new Date(),
+            },
+        });
+
         // Generate an access token (JWT)
         const accessToken = jwt.sign(
-            { userId: user.id, email: user.email, name: user.name, doctorId: user.doctorId },  // Payload with userId, email, username, and doctorId (if available)
+            { userId: updatedUser.id, email: updatedUser.email, name: updatedUser.name, doctorId: updatedUser.doctorId },  // Payload with userId, email, username, and doctorId (if available)
             process.env.JWT_SECRET,  // Secret key (ensure it's defined in .env)
             { expiresIn: '23h' }  // Expiration time (1 hour)
         );
 
-        console.log(req.body);
+        // console.log(req.body);
         // Respond with the access token and user details
         res.status(200).json({
             message: "Login successful",
@@ -76,7 +88,13 @@ const login = async (req, res) => {
             name: user.name,
             profilePicture: user.profileImage,
             doctorId: user.doctorId,
-            numberOfLogins: user.numberOfLogins
+            numberOfLogins: user.numberOfLogins,
+            userId: updatedUser.id,
+            patientId: updatedUser.id,
+            email: updatedUser.email,
+            name: updatedUser.name,
+            profilePicture: updatedUser.profileImage,
+            doctorId: updatedUser.doctorId,
         });
     } catch (error) {
         console.error("Login Error", error);  // Log the error to help debugging
