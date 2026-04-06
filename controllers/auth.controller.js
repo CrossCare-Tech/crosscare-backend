@@ -58,6 +58,13 @@ const login = async (req, res) => {
             },
         });
 
+        await prisma.patient.update({
+            where: { id: user.id },
+            data: {
+                numberOfLogins: (user.numberOfLogins || 0) + 1,
+            },
+        });
+
         // Generate an access token (JWT)
         const accessToken = jwt.sign(
             { userId: updatedUser.id, email: updatedUser.email, name: updatedUser.name, doctorId: updatedUser.doctorId },  // Payload with userId, email, username, and doctorId (if available)
@@ -152,7 +159,7 @@ const signup = async (req, res) => {
                     age: age,
                     isEmailVerified: false,
                     emailVerificationToken: otp,
-                    emailTokenExpires: expiryTime
+                    emailTokenExpires: expiryTime,
                 }
             });
         }
