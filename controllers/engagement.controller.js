@@ -6,25 +6,21 @@ const engagementController = {
   async logSession(req, res) {
     try {
       const { id } = req.params;
-      const { sessionStartAt, sessionEndAt, durationMs, messageCount } = req.body;
+      const { sessionStartAt, sessionEndAt, durationMinutes, messageCount } = req.body;
 
-      if (!sessionStartAt || !sessionEndAt || durationMs == null) {
+      if (!sessionStartAt || !sessionEndAt || durationMinutes == null) {
         return res.status(400).json({
           success: false,
-          message: "sessionStartAt, sessionEndAt, and durationMs are required",
+          message: "sessionStartAt, sessionEndAt, and durationMinutes are required",
         });
       }
-
-      sessionStartAt = new Date(sessionStartAt);
-      sessionEndAt =  new Date(sessionEndAt);
-      durationMs = parseFloat(((sessionEndAt - sessionStartAt) / 1000 / 60 ).toFixed(2));
 
       const engagement = await prisma.aiEngagement.create({
         data: {
           patientId: id,
-          sessionStartAt: sessionStartAt,
-          sessionEndAt: sessionEndAt,
-          durationMs: durationMs,
+          sessionStartAt: new Date(sessionStartAt),
+          sessionEndAt: new Date(sessionEndAt),
+          durationMinutes,
           messageCount: messageCount || 0,
         },
       });
@@ -47,18 +43,18 @@ const engagementController = {
 
       // Compute summary stats
       const totalSessions = engagements.length;
-      const totalDurationMs = engagements.reduce((sum, e) => sum + e.durationMs, 0);
+      const totalDurationMinutes = engagements.reduce((sum, e) => sum + e.durationMinutes, 0);
       const totalMessages = engagements.reduce((sum, e) => sum + e.messageCount, 0);
-      const avgDurationMs = totalSessions > 0 ? Math.round(totalDurationMs / totalSessions) : 0;
+      const avgDurationMinutes = totalSessions > 0 ? Math.round((totalDurationMinutes / totalSessions) * 100) / 100 : 0;
 
       return res.status(200).json({
         success: true,
         data: {
           summary: {
             totalSessions,
-            totalDurationMs,
+            totalDurationMinutes,
             totalMessages,
-            avgDurationMs,
+            avgDurationMinutes,
           },
           sessions: engagements,
         },

@@ -400,7 +400,7 @@ model AiEngagement {
   patientId      String   @map("patient_id")
   sessionStartAt DateTime @map("session_start_at")
   sessionEndAt   DateTime @map("session_end_at")
-  durationMs     Int      @map("duration_ms")
+  durationMinutes Float   @map("duration_minutes")
   messageCount   Int      @default(0) @map("message_count")
   createdAt      DateTime @default(now()) @map("created_at")
   patient        Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
