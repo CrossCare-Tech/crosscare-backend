@@ -36,6 +36,18 @@ model Patient {
   questionResponses      QuestionResponse[]
   questionnaires         Questionnaire[]
   savedMealTemplates     SavedMealTemplate[]
+  sessionMetrics         SessionMetric[]
+}
+
+model SessionMetric {
+  id              String    @id @default(uuid())
+  patientId       String
+  loginTime       DateTime  @default(now())
+  logoutTime      DateTime?
+  durationMinutes Float?
+  patient         Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("session_metrics")
 }
 
 model Doctor {
@@ -89,7 +101,9 @@ model PatientActivity {
   steps            Int?
   sleepStart       DateTime?
   sleepEnd         DateTime?
-  heart_rate       Float?
+  heart_rate            Float?
+  bloodPressureSystolic Int?
+  bloodPressureDiastolic Int?
   notetaking       String?
   wombPicture      String?
   calorieGoal      Int?

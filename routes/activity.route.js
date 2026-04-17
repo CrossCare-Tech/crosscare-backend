@@ -17,6 +17,8 @@ router.get('/user/activity/:id/sleepstatus', activityController.getSleepStatus);
 router.delete('/user/activity/:id/sleepstatus/delete/:id', activityController.deleteSleepStatus);
 router.post('/user/activity/:id/heart', activityController.logHeartRate);
 router.get('/user/activity/:id/heartstatus', activityController.getHeartRate);
+router.post('/user/activity/:id/bloodpressure', activityController.logBloodPressure);
+router.get('/user/activity/:id/bloodpressurestatus', activityController.getBloodPressureStatus);
 router.get('/user/activity/:id', activityController.getUserActivities);
 
 //note taking 
