@@ -56,13 +56,7 @@ const login = async (req, res) => {
             where: { id: user.id },
             data: {
                 updatedAt: new Date(),
-            },
-        });
-
-        await prisma.patient.update({
-            where: { id: user.id },
-            data: {
-                numberOfLogins: (user.numberOfLogins || 0) + 1,
+                numberOfLogins: { increment: 1 },
             },
         });
 
