@@ -22,6 +22,9 @@ router.post('/user/activity/:id/bp', authenticateMiddleware, activityController.
 router.get('/user/activity/:id/bpstatus', authenticateMiddleware, activityController.getBloodPressureStatus);
 router.post('/user/activity/:id/glucose', authenticateMiddleware, activityController.logGlucose);
 router.get('/user/activity/:id/glucosestatus', authenticateMiddleware, activityController.getGlucoseStatus);
+// Backward-compatible aliases
+router.post('/user/activity/:id/bloodpressure', authenticateMiddleware, activityController.logBloodPressure);
+router.get('/user/activity/:id/bloodpressurestatus', authenticateMiddleware, activityController.getBloodPressureStatus);
 router.get('/user/activity/:id', activityController.getUserActivities);
 
 //note taking 

@@ -11,6 +11,7 @@ import questionaireRoutes from './routes/questionaire.route.js';
 import avatarRoutes from './routes/avatar.route.js';
 import badgeRoutes from './routes/badge.route.js';
 import engagementRoutes from './routes/engagement.route.js';
+import metricsRoutes from './routes/metrics.route.js';
 
 
 // Load environment variables
@@ -56,6 +57,7 @@ app.use('/api', questionaireRoutes);
 app.use('/api', avatarRoutes);
 app.use('/api', badgeRoutes);
 app.use('/api', engagementRoutes);
+app.use('/api', metricsRoutes);
 
 // Doctor Routes
 // app.use('/api', doctorAuthRoutes);

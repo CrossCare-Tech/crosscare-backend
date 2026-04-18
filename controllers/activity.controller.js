@@ -5141,3 +5141,70 @@ export default {
   getSymptoms,
   deleteSymptom,
 };
+
+// Log Blood Pressure
+async function logBloodPressure(req, res) {
+  const { id } = req.params;
+  const { systolic, diastolic } = req.body;
+
+  if (!systolic || !diastolic || isNaN(systolic) || isNaN(diastolic)) {
+    return res.status(400).json({ message: 'Invalid blood pressure values. Both systolic and diastolic are required numbers.' });
+  }
+
+  try {
+    const patient = await prisma.patient.findUnique({ where: { id: String(id) } });
+    if (!patient) return res.status(404).json({ message: 'Patient not found.' });
+
+    const activity = await findOrCreateActivity(id);
+
+    const updated = await prisma.patientActivity.update({
+      where: { id: activity.id },
+      data: {
+        bloodPressureSystolic: parseInt(systolic),
+        bloodPressureDiastolic: parseInt(diastolic),
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      systolic: updated.bloodPressureSystolic,
+      diastolic: updated.bloodPressureDiastolic,
+      date: updated.date.toISOString().split('T')[0],
+    });
+  } catch (error) {
+    console.error('Error logging blood pressure:', error);
+    res.status(500).json({ message: 'Error logging blood pressure', error: error.message });
+  }
+}
+
+// Get Blood Pressure History
+async function getBloodPressureStatus(req, res) {
+  const { id } = req.params;
+  try {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(today.getDate() - 6);
+
+    const activities = await prisma.patientActivity.findMany({
+      where: {
+        patientId: String(id),
+        date: { gte: sevenDaysAgo, lte: today },
+        bloodPressureSystolic: { not: null },
+      },
+      orderBy: { date: 'asc' },
+      select: { date: true, bloodPressureSystolic: true, bloodPressureDiastolic: true },
+    });
+
+    const records = activities.map((a) => ({
+      date: a.date.toISOString().split('T')[0],
+      systolic: a.bloodPressureSystolic,
+      diastolic: a.bloodPressureDiastolic,
+    }));
+
+    res.status(200).json({ records });
+  } catch (error) {
+    console.error('Error fetching blood pressure history:', error);
+    res.status(500).json({ message: 'Error fetching blood pressure history', error: error.message });
+  }
+}

@@ -38,6 +38,18 @@ model Patient {
   questionnaires         Questionnaire[]
   savedMealTemplates     SavedMealTemplate[]
   aiEngagements          AiEngagement[]
+  sessionMetrics         SessionMetric[]
+}
+
+model SessionMetric {
+  id              String    @id @default(uuid())
+  patientId       String
+  loginTime       DateTime  @default(now())
+  logoutTime      DateTime?
+  durationMinutes Float?
+  patient         Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("session_metrics")
 }
 
 model Doctor {
@@ -82,45 +94,33 @@ model HabitBadge {
 }
 
 model PatientActivity {
-  id               String        @id @default(uuid())
-  patientId        String        @map("user_id")
-  date             DateTime
-  weight           Float?
-  weight_unit      String?
-  water            Int?
-  steps            Int?
-  sleepStart       DateTime?
-  sleepEnd         DateTime?
-  heart_rate       Float?
-  anxietyLevel     Int?
-  bloodPressureDiastolic Int?
-  bloodPressureSystolic Int?
-  energyLevel      Int?
-  glucoseLevel     Float?
-  glucoseMealContext String?
-  glucoseUnit      String?
-  moodLevel        Int?
-  moodNotes        String?
-  notetaking       String?
-  stressLevel      Int?
-  temperature      Float?
-  temperatureUnit  String?
-  wombPicture      String?
-  calorieGoal      Int?
-  caloriesConsumed Int?
-  goodFoodCount    Int?
-  badFoodCount     Int?
-  waterGoal        Int?
-  stepsGoal        Int?
+  id                     String          @id @default(uuid())
+  patientId              String          @map("user_id")
+  date                   DateTime
+  weight                 Float?
+  weight_unit            String?
+  water                  Int?
+  steps                  Int?
+  sleepStart             DateTime?
+  sleepEnd               DateTime?
+  heart_rate             Float?
+  notetaking             String?
+  wombPicture            String?
+  calorieGoal            Int?
+  caloriesConsumed       Int?
+  goodFoodCount          Int?
+  badFoodCount           Int?
+  waterGoal              Int?
+  stepsGoal              Int?
 
   // Mood & Emotional Tracking
   moodLevel              MoodLevel?
-  stressLevel            Int?          // 1-10 scale
-  anxietyLevel           Int?          // 1-10 scale
-  energyLevel            Int?          // 1-10 scale
+  stressLevel            Int?            // 1-10 scale
+  anxietyLevel           Int?            // 1-10 scale
+  energyLevel            Int?            // 1-10 scale
   moodNotes              String?
 
-  // Vitals 
+  // Vitals
   bloodPressureSystolic  Int?
   bloodPressureDiastolic Int?
   glucoseLevel           Float?
@@ -129,15 +129,12 @@ model PatientActivity {
   temperature            Float?
   temperatureUnit        String?
 
-  // Existing relations
-  medications       Medication[]
-  noteTaking        NoteTaking[]
-  patient           Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  wombPictures      WombPicture[]
-  meal              Meals[]
-
-  // New relations for health metrics
-  pregnancySymptoms PregnancySymptom[]
+  medications            Medication[]
+  noteTaking             NoteTaking[]
+  patient                Patient         @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  wombPictures           WombPicture[]
+  meal                   Meals[]
+  pregnancySymptoms      PregnancySymptom[]
 }
 
 model WombPicture {
@@ -400,14 +397,6 @@ model daily_analytics {
   updatedAt          DateTime
 }
 
-model session_metrics {
-  id              String    @id
-  patientId       String
-  loginTime       DateTime  @default(now())
-  logoutTime      DateTime?
-  durationMinutes Float?
-}
-
 model AiEngagement {
   id             String   @id @default(uuid())
   patientId      String   @map("patient_id")
@@ -528,4 +517,3 @@ enum SymptomSeverity {
   MODERATE
   SEVERE
 }
-
