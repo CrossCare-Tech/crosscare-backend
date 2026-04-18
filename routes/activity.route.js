@@ -86,6 +86,11 @@ router.post('/user/metrics/:id/mood', activityController.logMood);
 router.get('/user/metrics/:id/mood', activityController.getMoodHistory);
 router.put('/user/metrics/:id/mood/:activityId', activityController.updateMood);
 router.delete('/user/metrics/:id/mood/:activityId', activityController.deleteMood);
+// Backward-compatible aliases for mood routes
+router.post('/user/activity/:id/mood', activityController.logMood);
+router.get('/user/activity/:id/mood', activityController.getMoodHistory);
+router.put('/user/activity/:id/mood/:activityId', activityController.updateMood);
+router.delete('/user/activity/:id/mood/:activityId', activityController.deleteMood);
 
 // Symptoms Tracking
 router.post('/user/metrics/:id/symptom', activityController.logSymptom);
