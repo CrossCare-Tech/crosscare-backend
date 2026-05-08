@@ -1,6 +1,7 @@
 import { BadgeType, PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 import { createClient } from "@supabase/supabase-js";
+import WebSocket from "ws";
 // import AWS from "aws-sdk";
 import multer from "multer";
 import { v4 as uuidv4 } from "uuid";
@@ -3321,7 +3322,15 @@ const markMedicationCompleted = async (req, res) => {
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey =
   process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
+  realtime: {
+    transport: WebSocket,
+  },
+});
 
 // Configure multer for memory storage
 const storage = multer.memoryStorage();

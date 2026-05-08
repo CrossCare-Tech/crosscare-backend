@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import jwt from 'jsonwebtoken';  // JWT library to verify token
 import { createClient } from '@supabase/supabase-js';
+import WebSocket from "ws";
 import multer from "multer";
 import { v4 as uuidv4 } from "uuid";
 
@@ -141,7 +142,15 @@ const getProfileDetails = async (req, res) => {
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
+    auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+    },
+    realtime: {
+        transport: WebSocket,
+    },
+});
 
 // Storage bucket name
 const STORAGE_BUCKET = 'crosscare';
