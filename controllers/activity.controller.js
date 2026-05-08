@@ -1866,15 +1866,12 @@ const getGlucoseStatus = async (req, res) => {
       return res.status(403).json({ message: "Unauthorized access to glucose data." });
     }
 
-    const formatLocalDateYYYYMMDD = (date) => {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      return `${year}-${month}-${day}`;
-    };
+    // Match getBloodPressureStatus: format dates as UTC so they line up with
+    // the UTC-midnight timestamps stored by findOrCreateActivity.
+    const formatLocalDateYYYYMMDD = (date) => date.toISOString().split("T")[0];
 
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setUTCHours(0, 0, 0, 0);
 
     const sevenDaysAgo = new Date(today);
     sevenDaysAgo.setDate(today.getDate() - 6);
