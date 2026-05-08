@@ -1865,41 +1865,49 @@ const getGlucoseStatus = async (req, res) => {
       return res.status(403).json({ message: "Unauthorized access to glucose data." });
     }
 
+    const formatLocalDateYYYYMMDD = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+
     const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
 
     const sevenDaysAgo = new Date(today);
     sevenDaysAgo.setDate(today.getDate() - 6);
+
+    const endOfToday = new Date(today);
+    endOfToday.setHours(23, 59, 59, 999);
 
     const activities = await prisma.patientActivity.findMany({
       where: {
         patientId: String(id),
         date: {
           gte: sevenDaysAgo,
-          lte: today,
+          lte: endOfToday,
         },
       },
       orderBy: { date: "asc" },
     });
 
-    const formatDateYYYYMMDD = (date) => date.toISOString().split("T")[0];
-
     let lastLoggedGlucose = null;
     let lastLoggedGlucoseUnit = "mg/dL";
     let lastMealContext = null;
-    const todayKey = formatDateYYYYMMDD(today);
+    const todayKey = formatLocalDateYYYYMMDD(today);
     const todayActivity = activities.find(
-      (activity) => formatDateYYYYMMDD(activity.date) === todayKey
+      (activity) => formatLocalDateYYYYMMDD(activity.date) === todayKey
     );
 
     const glucoseData = [];
     for (let i = 0; i < 7; i++) {
       const currentDate = new Date(sevenDaysAgo);
       currentDate.setDate(sevenDaysAgo.getDate() + i);
-      const dateKey = formatDateYYYYMMDD(currentDate);
+      const dateKey = formatLocalDateYYYYMMDD(currentDate);
 
       const activity = activities.find(
-        (act) => formatDateYYYYMMDD(act.date) === dateKey
+        (act) => formatLocalDateYYYYMMDD(act.date) === dateKey
       );
 
       if (activity && activity.glucoseLevel !== null) {
