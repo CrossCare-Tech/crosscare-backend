@@ -2219,11 +2219,20 @@ const StepsGoal = async (req, res) => {
     // Find or create an activity for the patient
     const activity = await findOrCreateActivity(id);
 
-    // Update only the `steps` field
-    await prisma.patientActivity.update({
-      where: { id: activity.id },
-      data: { stepsGoal: stepsGoal }, // Ensure this matches your schema field name
-    });
+    // Update both today's activity stepsGoal AND the patient-level default so
+    // tomorrow's activity (and any client that reads patient.stepsGoal) gets
+    // the new value. Without the patient update the goal silently reverts on
+    // auto-refresh.
+    await prisma.$transaction([
+      prisma.patientActivity.update({
+        where: { id: activity.id },
+        data: { stepsGoal: stepsGoal },
+      }),
+      prisma.patient.update({
+        where: { id: id },
+        data: { stepsGoal: stepsGoal },
+      }),
+    ]);
 
     // Fetch updated activity to ensure correct `stepsGoal`
     const updatedActivity = await prisma.patientActivity.findUnique({
